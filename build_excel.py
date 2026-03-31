@@ -460,6 +460,144 @@ for idx, sample in enumerate(samples):
             style_data(cell, idx)
 
 # ===========================================================================
+# Build השאלות (Loans) sheet
+# ===========================================================================
+ws_l = wb["השאלות"]
+ws_l.sheet_view.rightToLeft = True
+
+# --- Filter area (rows 1–2) ---
+filter_labels = ["מדינה", "מושאל ל", "אחראי מהחברה", "באיחור"]
+for i, label in enumerate(filter_labels):
+    cell = ws_l.cell(row=1, column=i + 1, value=label)
+    style_header(cell)
+    # Empty filter value cell below
+    val_cell = ws_l.cell(row=2, column=i + 1)
+    val_cell.border = THIN_BORDER
+    val_cell.alignment = CELL_ALIGN
+
+# D2: Overdue filter — Yes/No dropdown
+dv = DataValidation(type="list", formula1="כן_לא", allow_blank=True)
+dv.sqref = "D2"
+ws_l.add_data_validation(dv)
+
+# Row 3: empty separator (no content)
+
+# --- Display table headers (row 4) ---
+loan_headers = [
+    "מזהה ייחודי",     # A → Inventory D
+    "שם מוצר",          # B → Inventory B
+    "גרסה",             # C → Inventory C
+    "מושאל ל",          # D → Inventory Y
+    "מדינה",             # E → Inventory Z
+    "אחראי מהחברה",    # F → Inventory AA
+    "תאריך השאלה",      # G → Inventory F
+    "החזרה משוערת",     # H → Inventory AB
+    "באיחור",            # I → computed
+    "הערות",             # J → Inventory AC
+]
+for i, h in enumerate(loan_headers):
+    cell = ws_l.cell(row=4, column=i + 1, value=h)
+    style_header(cell)
+
+# Column K: hidden helper (row reference)
+ws_l.cell(row=4, column=11, value="row_ref")
+style_header(ws_l.cell(row=4, column=11))
+ws_l.column_dimensions["K"].hidden = True
+
+# Column widths
+loan_widths = {"A": 16, "B": 24, "C": 12, "D": 18, "E": 14,
+               "F": 18, "G": 16, "H": 16, "I": 14, "J": 28, "K": 10}
+for col, w in loan_widths.items():
+    ws_l.column_dimensions[col].width = w
+
+# Freeze at row 5 (below headers)
+ws_l.freeze_panes = "A5"
+
+# --- Formulas for 100 display rows (rows 5–104) ---
+# Inventory column references (data rows 2–500)
+INV = "מלאי"
+INV_RANGE = "$2:$500"
+
+# Helper column K: SMALL/IF to find nth matching row
+# Conditions: status=מושאל AND optional filters from row 2
+# This is an implicit array formula (works in Excel 365; CSE in older)
+OVERDUE_CHECK = (
+    f"({INV}!$AB$2:$AB$500<>\"\")*({INV}!$AB$2:$AB$500<TODAY())"
+)
+FILTER_COND = (
+    f"({INV}!$X$2:$X$500=\"מושאל\")"
+    f"*(IF($A$2=\"\",1,{INV}!$Z$2:$Z$500=$A$2))"
+    f"*(IF($B$2=\"\",1,{INV}!$Y$2:$Y$500=$B$2))"
+    f"*(IF($C$2=\"\",1,{INV}!$AA$2:$AA$500=$C$2))"
+    f"*(IF($D$2=\"\",1,IF($D$2=\"כן\",{OVERDUE_CHECK},1-{OVERDUE_CHECK})))"
+)
+ROW_INDEX_ARRAY = f"ROW({INV}!$A$2:$A$500)-ROW({INV}!$A$2)+1"
+
+# Map: loans display column → inventory column letter
+inv_col_map = {
+    "A": "D",   # מזהה ייחודי
+    "B": "B",   # שם מוצר
+    "C": "C",   # גרסה
+    "D": "Y",   # מושאל ל
+    "E": "Z",   # מדינה
+    "F": "AA",  # אחראי מהחברה
+    "G": "F",   # תאריך השאלה
+    "H": "AB",  # החזרה משוערת
+    # I = computed (overdue)
+    "J": "AC",  # הערות
+}
+
+for r in range(5, 105):
+    n = r - 4  # nth match
+
+    # K: helper — row index of nth matching inventory row
+    ws_l[f"K{r}"] = (
+        f"=IFERROR(SMALL(IF({FILTER_COND},{ROW_INDEX_ARRAY},\"\"),{n}),\"\")"
+    )
+
+    # A–H, J: pull data via INDEX using the helper row reference
+    for disp_col, inv_col in inv_col_map.items():
+        ws_l[f"{disp_col}{r}"] = (
+            f'=IF($K{r}="","",INDEX({INV}!${inv_col}$2:${inv_col}$500,$K{r}))'
+        )
+
+    # I: Overdue status — computed from expected return date
+    ws_l[f"I{r}"] = (
+        f'=IF($K{r}="","",IF(AND('
+        f'INDEX({INV}!$AB$2:$AB$500,$K{r})<>"",'
+        f'INDEX({INV}!$AB$2:$AB$500,$K{r})<TODAY()),'
+        f'"באיחור!","תקין"))'
+    )
+
+    # Date formatting for loan date (G) and expected return (H)
+    ws_l[f"G{r}"].number_format = "DD/MM/YYYY"
+    ws_l[f"H{r}"].number_format = "DD/MM/YYYY"
+
+    # Alternating row fill for all cells in the row
+    for c in range(1, 12):
+        cell = ws_l.cell(row=r, column=c)
+        if not cell.border or cell.border == Border():
+            pass
+        style_data(cell, r - 5)
+
+# --- Conditional formatting ---
+RED_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+RED_FONT = Font(bold=True, color="9C0006")
+
+# Overdue text in column I — red bold font
+ws_l.conditional_formatting.add(
+    "I5:I104",
+    FormulaRule(formula=['I5="באיחור!"'], font=RED_FONT, fill=RED_FILL),
+)
+
+# Entire row highlighted with light red when overdue
+ws_l.conditional_formatting.add(
+    "A5:J104",
+    FormulaRule(formula=['$I5="באיחור!"'], fill=RED_FILL),
+)
+
+
+# ===========================================================================
 # Save
 # ===========================================================================
 wb.save("ametrine_inventory.xlsx")

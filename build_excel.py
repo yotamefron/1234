@@ -333,10 +333,11 @@ for r in FORMULA_ROWS:
     # T: Secondary environment for Side-B print
     ws[f"T{r}"] = f'=IFERROR(VLOOKUP(N{r},{PRINTS_RANGE},3,FALSE),"")'
 
-    # AE: env_match — TRUE if any of Q/R/S/T matches the dashboard filter cell
+    # AE: env_match — TRUE if "הכל" selected or any of Q/R/S/T matches env
     ws[f"AE{r}"] = (
-        f"=OR(Q{r}='לוח בקרה'!$B$2,R{r}='לוח בקרה'!$B$2,"
-        f"S{r}='לוח בקרה'!$B$2,T{r}='לוח בקרה'!$B$2)"
+        f"=IF('לוח בקרה'!$A$2=\"הכל\",TRUE,"
+        f"OR(Q{r}='לוח בקרה'!$A$2,R{r}='לוח בקרה'!$A$2,"
+        f"S{r}='לוח בקרה'!$A$2,T{r}='לוח בקרה'!$A$2))"
     )
 
     # AF: fully_ok — env matches AND visually+thermally OK on at least one side
@@ -594,6 +595,281 @@ ws_l.conditional_formatting.add(
 ws_l.conditional_formatting.add(
     "A5:J104",
     FormulaRule(formula=['$I5="באיחור!"'], fill=RED_FILL),
+)
+
+
+# ===========================================================================
+# Build לוח בקרה (Dashboard) sheet
+# ===========================================================================
+ws_d = wb["לוח בקרה"]
+ws_d.sheet_view.rightToLeft = True
+
+# --- Dashboard-specific styles ---
+FILTER_BG = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+FILTER_FONT = Font(bold=True, color="FFFFFF", size=11)
+FILTER_VAL_FILL = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
+TITLE_FONT_D = Font(bold=True, size=14, color="1F3864")
+METRIC_LABEL_FONT = Font(bold=True, size=11, color="1F3864")
+METRIC_VAL_FONT = Font(bold=True, size=16, color="1F3864")
+SUMMARY_BG = PatternFill(start_color="E9EFF7", end_color="E9EFF7", fill_type="solid")
+
+# --- Filter Area (rows 1–4) ---
+# Row 1–2: first 6 filters
+filter_r1 = ["סביבה", "קו מוצר", "מוצר", "גרסה", "סוג בד", "מידה"]
+for i, label in enumerate(filter_r1):
+    c = i + 1
+    cell = ws_d.cell(row=1, column=c, value=label)
+    cell.font = FILTER_FONT
+    cell.fill = FILTER_BG
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_d.cell(row=2, column=c, value="הכל")
+    val.fill = FILTER_VAL_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Row 3–4: last 5 filters
+filter_r2 = ["סטטוס", "מדינה", "תקינות ויזואלית", "תקינות תרמית", "גרסה סופית"]
+for i, label in enumerate(filter_r2):
+    c = i + 1
+    cell = ws_d.cell(row=3, column=c, value=label)
+    cell.font = FILTER_FONT
+    cell.fill = FILTER_BG
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_d.cell(row=4, column=c, value="הכל")
+    val.fill = FILTER_VAL_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Data validations for filter dropdowns
+dv_defs = [
+    ("A2", '"הכל,מדברי,מיוער,שלג,ימי,מבולדר/שטח בנוי,אחר"'),
+    ("B2", '"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,'
+           'Blankets,Urban,Platform On-The-Move,Accessories"'),
+    ("E2", '"הכל,Sahar,Inbar,SRV,Gabardine,Meron,Arber,IRR,'
+           'Polar,Nylon,Mesh,PVC,Other"'),
+    ("F2", '"הכל,S,M,L,XL,XXL,One Size,N/A"'),
+    ("A4", '"הכל,במלאי,מושאל,בחדר תצוגה,בתיק הדגמה"'),
+    ("C4", '"הכל,כן,לא"'),
+    ("D4", '"הכל,כן,לא"'),
+    ("E4", '"הכל,כן,לא"'),
+]
+for sqref, f1 in dv_defs:
+    dv = DataValidation(type="list", formula1=f1, allow_blank=True)
+    dv.sqref = sqref
+    ws_d.add_data_validation(dv)
+# C2 (product), D2 (version), B4 (country) — free text, default "הכל"
+
+# Column widths
+for col, w in {"A": 48, "B": 22, "C": 20, "D": 18, "E": 18,
+               "F": 14, "G": 18, "H": 18, "I": 14, "J": 28, "K": 10}.items():
+    ws_d.column_dimensions[col].width = w
+
+# ---------------------------------------------------------------------------
+# Summary Area (rows 5–18)
+# ---------------------------------------------------------------------------
+# Reusable formula building blocks
+DI = "מלאי"                 # inventory sheet name
+DR = "$2:$500"              # data row range
+
+
+def dflt(dash_cell, inv_col):
+    """Dashboard filter term: pass all when 'הכל', else exact match."""
+    return f'(IF({dash_cell}="הכל",1,{DI}!${inv_col}{DR}={dash_cell}))'
+
+
+F_DATA = f'({DI}!$D{DR}<>"")'
+F_ENV  = f'(--{DI}!$AE{DR})'
+
+# Build full base‐filter string  (data × env × 10 user filters)
+BF = (f'{F_DATA}*{F_ENV}'
+      f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
+      f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
+      f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
+      f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
+
+# Base filter WITHOUT env (for "wrong‐print" metric)
+BF_NE = (f'{F_DATA}'
+         f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
+         f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
+         f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
+         f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
+
+# Section title
+ws_d["A5"] = "סיכום"
+ws_d["A5"].font = TITLE_FONT_D
+
+# Metric definitions: (row, label, formula)
+metrics = [
+    (6,  'סה"כ פריטים תואמים',
+     f'=SUMPRODUCT({BF})'),
+    (7,  "כמות תקין לגמרי",
+     f'=SUMPRODUCT({BF}*(--{DI}!$AF{DR}))'),
+    (8,  "כמות תקין ויזואלית בלבד",
+     f'=SUMPRODUCT({BF}*(--{DI}!$AG{DR}))'),
+    (9,  "כמות תקין תרמית בלבד",
+     f'=SUMPRODUCT({BF}*(--{DI}!$AH{DR}))'),
+    (10, "כמות במלאי",
+     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="במלאי"))'),
+    (11, "כמות מושאלים",
+     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="מושאל"))'),
+    (12, "כמות בחדר תצוגה",
+     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="בחדר תצוגה"))'),
+    (13, "כמות בתיק הדגמה",
+     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="בתיק הדגמה"))'),
+    (14, "כמות עם פער בתכולה",
+     f'=SUMPRODUCT({BF}*({DI}!$AD{DR}="כן"))'),
+    (15, "כמות גרסה מיוחדת - פיתוח",
+     f'=SUMPRODUCT({BF}*({DI}!$J{DR}="כן"))'),
+    (16, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
+     f'=IF($A$2="הכל","—",'
+     f'SUMPRODUCT({BF_NE}*({DI}!$AE{DR}=FALSE)'
+     f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))'),
+]
+
+for row, label, formula in metrics:
+    ws_d.merge_cells(f"A{row}:C{row}")
+    cl = ws_d[f"A{row}"]
+    cl.value = label
+    cl.font = METRIC_LABEL_FONT
+    cl.alignment = CELL_ALIGN
+    cl.fill = SUMMARY_BG
+    cl.border = THIN_BORDER
+    cv = ws_d[f"D{row}"]
+    cv.value = formula
+    cv.font = METRIC_VAL_FONT
+    cv.alignment = Alignment(horizontal="center", vertical="center")
+    cv.fill = SUMMARY_BG
+    cv.border = THIN_BORDER
+
+# Row 17: print detail for wrong-env metric
+ws_d.merge_cells("A17:C17")
+ws_d["A17"].value = "פירוט הדפסים שאינם מתאימים"
+ws_d["A17"].font = METRIC_LABEL_FONT
+ws_d["A17"].alignment = CELL_ALIGN
+ws_d["A17"].fill = SUMMARY_BG
+ws_d["A17"].border = THIN_BORDER
+ws_d.merge_cells("D17:J17")
+ws_d["D17"] = (
+    f'=IF($A$2="הכל","—",IFERROR(TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
+    f'{DI}!$M{DR},({DI}!$D{DR}<>"")*({DI}!$AE{DR}=FALSE)'
+    f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))),""))'
+)
+ws_d["D17"].font = Font(size=10, color="1F3864")
+ws_d["D17"].alignment = CELL_ALIGN
+ws_d["D17"].fill = SUMMARY_BG
+ws_d["D17"].border = THIN_BORDER
+
+# Row 18: empty separator
+
+# ---------------------------------------------------------------------------
+# Filtered Product Detail (rows 19–320)
+# ---------------------------------------------------------------------------
+ws_d["A19"] = "פירוט פריטים מסוננים"
+ws_d["A19"].font = TITLE_FONT_D
+
+detail_headers = [
+    "מזהה", "שם מוצר", "גרסה", "סוג בד", "הדפס A", "הדפס B",
+    "תקין ויזואלי", "תקין תרמי", "סטטוס", "הערות",
+]
+for i, h in enumerate(detail_headers):
+    cell = ws_d.cell(row=20, column=i + 1, value=h)
+    style_header(cell)
+
+# Hidden helper column K
+style_header(ws_d.cell(row=20, column=11, value="row_ref"))
+ws_d.column_dimensions["K"].hidden = True
+
+# Freeze below detail headers
+ws_d.freeze_panes = "A21"
+
+# SMALL/IF row-index formula shared components
+D_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
+
+# Detail column → inventory column mapping
+det_map = {
+    "A": "D", "B": "B", "C": "C", "D": "G", "E": "M",
+    "F": "N", "G": "O", "H": "U", "I": "X", "J": "AC",
+}
+
+for r in range(21, 321):
+    n = r - 20  # nth match
+
+    # K: helper — row index of nth matching inventory row
+    ws_d[f"K{r}"] = f'=IFERROR(SMALL(IF({BF},{D_ROW_IDX},""),{n}),"")'
+
+    # A–J: pull data via INDEX
+    for dcol, icol in det_map.items():
+        ws_d[f"{dcol}{r}"] = (
+            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+        )
+
+    # Style all cells in the row
+    for c in range(1, 12):
+        style_data(ws_d.cell(row=r, column=c), r - 21)
+
+# ---------------------------------------------------------------------------
+# Active Loans Detail (rows 322–423, always displayed)
+# ---------------------------------------------------------------------------
+LOAN_T = 322        # title row
+LOAN_H = 323        # header row
+LOAN_S = 324        # first data row
+LOAN_E = 423        # last data row
+
+ws_d[f"A{LOAN_T}"] = "השאלות פעילות"
+ws_d[f"A{LOAN_T}"].font = TITLE_FONT_D
+
+loan_d_headers = ["מזהה", "מוצר", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
+for i, h in enumerate(loan_d_headers):
+    cell = ws_d.cell(row=LOAN_H, column=i + 1, value=h)
+    style_header(cell)
+
+# Reuse column K as helper for the loans row range
+style_header(ws_d.cell(row=LOAN_H, column=11, value="loan_ref"))
+
+# Loan filter: status = מושאל (always, no dashboard filter)
+LOAN_COND = f'({DI}!$D{DR}<>"")*({DI}!$X{DR}="מושאל")'
+
+loan_d_map = {"A": "D", "B": "B", "C": "Y", "D": "Z", "E": "AB"}
+
+for r in range(LOAN_S, LOAN_E + 1):
+    n = r - LOAN_S + 1
+
+    # K: helper
+    ws_d[f"K{r}"] = f'=IFERROR(SMALL(IF({LOAN_COND},{D_ROW_IDX},""),{n}),"")'
+
+    # A–E: pull data
+    for dcol, icol in loan_d_map.items():
+        ws_d[f"{dcol}{r}"] = (
+            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+        )
+
+    # F: overdue indicator
+    ws_d[f"F{r}"] = (
+        f'=IF($K{r}="","",IF(AND('
+        f'INDEX({DI}!$AB{DR},$K{r})<>"",'
+        f'INDEX({DI}!$AB{DR},$K{r})<TODAY()),'
+        f'"באיחור!","תקין"))'
+    )
+
+    # Date formatting for expected return (E)
+    ws_d[f"E{r}"].number_format = "DD/MM/YYYY"
+
+    # Style
+    for c in range(1, 12):
+        style_data(ws_d.cell(row=r, column=c), r - LOAN_S)
+
+# Conditional formatting — overdue loans red highlight
+RED_FILL_D = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+RED_FONT_D = Font(bold=True, color="9C0006")
+ws_d.conditional_formatting.add(
+    f"F{LOAN_S}:F{LOAN_E}",
+    FormulaRule(formula=[f'F{LOAN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
+)
+ws_d.conditional_formatting.add(
+    f"A{LOAN_S}:F{LOAN_E}",
+    FormulaRule(formula=[f'$F{LOAN_S}="באיחור!"'], fill=RED_FILL_D),
 )
 
 

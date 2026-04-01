@@ -874,6 +874,399 @@ ws_d.conditional_formatting.add(
 
 
 # ===========================================================================
+# Build ערכים טכנולוגיים (Tech Values) sheet
+# ===========================================================================
+ws_tv = wb["ערכים טכנולוגיים"]
+ws_tv.sheet_view.rightToLeft = True
+
+tv_headers = [
+    "מזהה פריט",    # A — manual (key to inventory)
+    "שם מוצר",       # B — formula from inventory
+    "גרסה",          # C — formula
+    "קו מוצר",       # D — formula
+    "הדפס צד A",     # E — formula
+    "MWIR צד A",     # F — manual numeric
+    "LWIR צד A",     # G — manual numeric
+    "הדפס צד B",     # H — formula
+    "MWIR צד B",     # I — manual numeric
+    "LWIR צד B",     # J — manual numeric
+    "נובל",           # K — Yes/No dropdown
+    "ממוצע MWIR",    # L — formula
+    "ממוצע LWIR",    # M — formula
+    "ממוצע משולב",   # N — formula
+]
+for i, h in enumerate(tv_headers):
+    cell = ws_tv.cell(row=1, column=i + 1, value=h)
+    style_header(cell)
+
+tv_widths = [16, 24, 12, 18, 18, 14, 14, 18, 14, 14, 10, 16, 16, 16]
+for i, w in enumerate(tv_widths):
+    ws_tv.column_dimensions[get_column_letter(i + 1)].width = w
+
+ws_tv.freeze_panes = "A2"
+
+# Data validation: Novel (K) = Yes/No
+dv = DataValidation(type="list", formula1="כן_לא", allow_blank=True)
+dv.sqref = "K2:K500"
+ws_tv.add_data_validation(dv)
+
+# Number format for MWIR/LWIR columns
+for col in ("F", "G", "I", "J", "L", "M", "N"):
+    for r in range(2, 501):
+        ws_tv[f"{col}{r}"].number_format = "0.00"
+
+# Inventory ID range for MATCH
+INV_ID = f"{DI}!$D$2:$D$500"
+
+# Formulas for all rows (2–500): lookup from inventory + averages
+for r in range(2, 501):
+    MR_TV = f"MATCH(A{r},{INV_ID},0)"
+    # B: product name
+    ws_tv[f"B{r}"] = f'=IFERROR(INDEX({DI}!$B$2:$B$500,{MR_TV}),"")'
+    # C: version
+    ws_tv[f"C{r}"] = f'=IFERROR(INDEX({DI}!$C$2:$C$500,{MR_TV}),"")'
+    # D: product line
+    ws_tv[f"D{r}"] = f'=IFERROR(INDEX({DI}!$A$2:$A$500,{MR_TV}),"")'
+    # E: print A
+    ws_tv[f"E{r}"] = f'=IFERROR(INDEX({DI}!$M$2:$M$500,{MR_TV}),"")'
+    # H: print B
+    ws_tv[f"H{r}"] = f'=IFERROR(INDEX({DI}!$N$2:$N$500,{MR_TV}),"")'
+    # L: avg MWIR (average both sides if B exists, else A only)
+    ws_tv[f"L{r}"] = f'=IF(F{r}="","",IF(I{r}<>"",AVERAGE(F{r},I{r}),F{r}))'
+    # M: avg LWIR
+    ws_tv[f"M{r}"] = f'=IF(G{r}="","",IF(J{r}<>"",AVERAGE(G{r},J{r}),G{r}))'
+    # N: combined avg
+    ws_tv[f"N{r}"] = f'=IF(OR(L{r}="",M{r}=""),"",AVERAGE(L{r},M{r}))'
+
+# --- 5 sample rows (manual columns: A, F, G, I, J, K) ---
+tv_samples = [
+    # (ID, MWIR_A, LWIR_A, MWIR_B, LWIR_B, Novel)
+    ("INV-001", 0.85, 0.78, 0.72, 0.65, "לא"),
+    ("INV-002", 0.91, 0.83, None, None, "כן"),
+    ("INV-003", 0.76, 0.71, 0.79, 0.74, "לא"),
+    ("INV-004", 0.95, 0.89, None, None, "כן"),
+    ("INV-005", 0.88, 0.82, 0.73, 0.68, "לא"),
+]
+for idx, (sid, mwir_a, lwir_a, mwir_b, lwir_b, novel) in enumerate(tv_samples):
+    r = idx + 2
+    ws_tv[f"A{r}"] = sid
+    ws_tv[f"F{r}"] = mwir_a
+    ws_tv[f"G{r}"] = lwir_a
+    if mwir_b is not None:
+        ws_tv[f"I{r}"] = mwir_b
+    if lwir_b is not None:
+        ws_tv[f"J{r}"] = lwir_b
+    ws_tv[f"K{r}"] = novel
+    # Style entire row
+    for c in range(1, 15):
+        style_data(ws_tv.cell(row=r, column=c), idx)
+
+
+# ===========================================================================
+# Build לוח בקרה טכנו-מבצעי (TechOps Dashboard) sheet
+# ===========================================================================
+ws_t = wb["לוח בקרה טכנו-מבצעי"]
+ws_t.sheet_view.rightToLeft = True
+
+# --- Filter Area (rows 1–6) ---
+# Row 1–2: first 6 filters (identical to regular dashboard)
+for i, label in enumerate(filter_r1):
+    c = i + 1
+    cell = ws_t.cell(row=1, column=c, value=label)
+    cell.font = FILTER_FONT
+    cell.fill = FILTER_BG
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_t.cell(row=2, column=c, value="הכל")
+    val.fill = FILTER_VAL_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Row 3–4: next 5 filters
+for i, label in enumerate(filter_r2):
+    c = i + 1
+    cell = ws_t.cell(row=3, column=c, value=label)
+    cell.font = FILTER_FONT
+    cell.fill = FILTER_BG
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_t.cell(row=4, column=c, value="הכל")
+    val.fill = FILTER_VAL_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Row 5–6: tech-specific filters
+tech_filter_labels = [
+    "נובל", "MWIR מינ׳", "MWIR מקס׳",
+    "LWIR מינ׳", "LWIR מקס׳", "משולב מינ׳", "משולב מקס׳",
+]
+for i, label in enumerate(tech_filter_labels):
+    c = i + 1
+    cell = ws_t.cell(row=5, column=c, value=label)
+    cell.font = FILTER_FONT
+    cell.fill = FILTER_BG
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_t.cell(row=6, column=c)
+    val.value = "הכל" if i == 0 else None
+    val.fill = FILTER_VAL_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Data validations — same base filters as regular dashboard
+for sqref, f1 in dv_defs:
+    dv = DataValidation(type="list", formula1=f1, allow_blank=True)
+    dv.sqref = sqref
+    ws_t.add_data_validation(dv)
+
+# Novel filter (A6)
+dv = DataValidation(type="list", formula1='"הכל,כן,לא"', allow_blank=True)
+dv.sqref = "A6"
+ws_t.add_data_validation(dv)
+
+# Column widths
+for col, w in {"A": 48, "B": 22, "C": 20, "D": 18, "E": 18,
+               "F": 14, "G": 14, "H": 14, "I": 14, "J": 28,
+               "K": 10, "L": 10, "M": 14, "N": 14,
+               "O": 14, "P": 14, "Q": 16}.items():
+    ws_t.column_dimensions[col].width = w
+
+# ---------------------------------------------------------------------------
+# TechOps formula building blocks
+# ---------------------------------------------------------------------------
+TV = "'ערכים טכנולוגיים'"  # sheet name (quoted for formulas)
+
+# Inline env match (not dependent on regular dashboard AE helper)
+T_ENV = (f'IF($A$2="הכל",1,'
+         f'({DI}!$Q{DR}=$A$2)+({DI}!$R{DR}=$A$2)+'
+         f'({DI}!$S{DR}=$A$2)+({DI}!$T{DR}=$A$2)>0)')
+
+# Base filter with inline env (identical logic to regular, self-contained)
+BF_T = (f'{F_DATA}*({T_ENV})'
+        f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
+        f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
+        f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
+        f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
+
+# MATCH expression: find inventory item in tech values sheet
+TMATCH = f'MATCH({DI}!$D{DR},{TV}!$A{DR},0)'
+
+# Tech filter conditions (appended to BF_T)
+# Novel (A6)
+TF_NOV = f'IF($A$6="הכל",1,IFERROR(--( INDEX({TV}!$K{DR},{TMATCH})=$A$6),0))'
+# MWIR avg (col L) min/max (B6/C6)
+TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!$L{DR},{TMATCH})>=$B$6),0))'
+TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!$L{DR},{TMATCH})<=$C$6),0))'
+# LWIR avg (col M) min/max (D6/E6)
+TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!$M{DR},{TMATCH})>=$D$6),0))'
+TF_LW2 = f'IF($E$6="",1,IFERROR(--(INDEX({TV}!$M{DR},{TMATCH})<=$E$6),0))'
+# Combined avg (col N) min/max (F6/G6)
+TF_CB1 = f'IF($F$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})>=$F$6),0))'
+TF_CB2 = f'IF($G$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})<=$G$6),0))'
+
+TF_ALL = (f'*({TF_NOV})*({TF_MW1})*({TF_MW2})'
+          f'*({TF_LW1})*({TF_LW2})*({TF_CB1})*({TF_CB2})')
+
+BF_TECH = BF_T + TF_ALL  # full techops filter
+
+# Inline quality conditions (not dependent on regular dashboard helpers)
+FULLY_OK_T = (f'(({DI}!$O{DR}="כן")*({DI}!$U{DR}="כן")'
+              f'+({DI}!$P{DR}="כן")*({DI}!$V{DR}="כן")>0)')
+ANY_VIS_T = f'(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)'
+ANY_THERM_T = f'(({DI}!$U{DR}="כן")+({DI}!$V{DR}="כן")>0)'
+
+# BF_TECH without env for wrong-print metric
+BF_TECH_NE = (f'{F_DATA}'
+              f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
+              f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
+              f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
+              f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
+              + TF_ALL)
+
+# Inline env FALSE for wrong-print
+T_ENV_FALSE = (f'IF($A$2="הכל",FALSE,'
+               f'({DI}!$Q{DR}<>$A$2)*({DI}!$R{DR}<>$A$2)*'
+               f'({DI}!$S{DR}<>$A$2)*({DI}!$T{DR}<>$A$2))')
+
+# ---------------------------------------------------------------------------
+# Summary Area (rows 8–20)
+# ---------------------------------------------------------------------------
+ws_t["A7"] = "סיכום"
+ws_t["A7"].font = TITLE_FONT_D
+
+t_metrics = [
+    (8,  'סה"כ פריטים תואמים',
+     f'=SUMPRODUCT({BF_TECH})'),
+    (9,  "כמות תקין לגמרי",
+     f'=SUMPRODUCT({BF_TECH}*{FULLY_OK_T})'),
+    (10, "כמות תקין ויזואלית בלבד",
+     f'=SUMPRODUCT({BF_TECH}*{ANY_VIS_T}*(1-{FULLY_OK_T}))'),
+    (11, "כמות תקין תרמית בלבד",
+     f'=SUMPRODUCT({BF_TECH}*{ANY_THERM_T}*(1-{ANY_VIS_T}))'),
+    (12, "כמות במלאי",
+     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="במלאי"))'),
+    (13, "כמות מושאלים",
+     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="מושאל"))'),
+    (14, "כמות בחדר תצוגה",
+     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="בחדר תצוגה"))'),
+    (15, "כמות בתיק הדגמה",
+     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="בתיק הדגמה"))'),
+    (16, "כמות עם פער בתכולה",
+     f'=SUMPRODUCT({BF_TECH}*({DI}!$AD{DR}="כן"))'),
+    (17, "כמות גרסה מיוחדת - פיתוח",
+     f'=SUMPRODUCT({BF_TECH}*({DI}!$J{DR}="כן"))'),
+    (18, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
+     f'=IF($A$2="הכל","—",'
+     f'SUMPRODUCT({BF_TECH_NE}*({T_ENV_FALSE})*{ANY_VIS_T}))'),
+]
+
+for row, label, formula in t_metrics:
+    ws_t.merge_cells(f"A{row}:C{row}")
+    cl = ws_t[f"A{row}"]
+    cl.value = label
+    cl.font = METRIC_LABEL_FONT
+    cl.alignment = CELL_ALIGN
+    cl.fill = SUMMARY_BG
+    cl.border = THIN_BORDER
+    cv = ws_t[f"D{row}"]
+    cv.value = formula
+    cv.font = METRIC_VAL_FONT
+    cv.alignment = Alignment(horizontal="center", vertical="center")
+    cv.fill = SUMMARY_BG
+    cv.border = THIN_BORDER
+
+# Row 19: print detail
+ws_t.merge_cells("A19:C19")
+ws_t["A19"].value = "פירוט הדפסים שאינם מתאימים"
+ws_t["A19"].font = METRIC_LABEL_FONT
+ws_t["A19"].alignment = CELL_ALIGN
+ws_t["A19"].fill = SUMMARY_BG
+ws_t["A19"].border = THIN_BORDER
+ws_t.merge_cells("D19:J19")
+ws_t["D19"] = (
+    f'=IF($A$2="הכל","—",IFERROR(TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
+    f'{DI}!$M{DR},({DI}!$D{DR}<>"")*({T_ENV_FALSE})'
+    f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))),""))'
+)
+ws_t["D19"].font = Font(size=10, color="1F3864")
+ws_t["D19"].alignment = CELL_ALIGN
+ws_t["D19"].fill = SUMMARY_BG
+ws_t["D19"].border = THIN_BORDER
+
+# ---------------------------------------------------------------------------
+# TechOps Filtered Product Detail (rows 22–321)
+# ---------------------------------------------------------------------------
+ws_t["A21"] = "פירוט פריטים מסוננים"
+ws_t["A21"].font = TITLE_FONT_D
+
+t_det_headers = [
+    "מזהה", "שם מוצר", "גרסה", "סוג בד", "הדפס A", "הדפס B",
+    "תקין ויזואלי", "תקין תרמי", "סטטוס", "הערות",
+    # hidden helper
+    "row_ref",
+    # tech columns
+    "נובל", "MWIR A", "MWIR B", "LWIR A", "LWIR B", "ממוצע משולב",
+]
+for i, h in enumerate(t_det_headers):
+    cell = ws_t.cell(row=22, column=i + 1, value=h)
+    style_header(cell)
+
+# K (col 11) = hidden helper
+ws_t.column_dimensions["K"].hidden = True
+
+# Freeze below detail headers
+ws_t.freeze_panes = "A23"
+
+# Detail column → inventory column mapping (A–J same as regular)
+t_det_map = {
+    "A": "D", "B": "B", "C": "C", "D": "G", "E": "M",
+    "F": "N", "G": "O", "H": "U", "I": "X", "J": "AC",
+}
+
+# Tech detail columns → tech values sheet column mapping
+t_tech_map = {
+    "L": "K",  # נובל
+    "M": "F",  # MWIR A
+    "N": "I",  # MWIR B
+    "O": "G",  # LWIR A
+    "P": "J",  # LWIR B
+    "Q": "N",  # ממוצע משולב
+}
+
+T_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
+
+for r in range(23, 323):
+    n = r - 22  # nth match
+
+    # K: helper — row index of nth matching inventory row
+    ws_t[f"K{r}"] = f'=IFERROR(SMALL(IF({BF_TECH},{T_ROW_IDX},""),{n}),"")'
+
+    # A–J: pull data from inventory
+    for dcol, icol in t_det_map.items():
+        ws_t[f"{dcol}{r}"] = (
+            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+        )
+
+    # L–Q: pull tech values via INDEX/MATCH on item ID (A column = ID)
+    for dcol, tcol in t_tech_map.items():
+        ws_t[f"{dcol}{r}"] = (
+            f'=IF($K{r}="","",IFERROR(INDEX({TV}!${tcol}{DR},'
+            f'MATCH(A{r},{TV}!$A{DR},0)),""))'
+        )
+
+    # Style all cells
+    for c in range(1, 18):
+        style_data(ws_t.cell(row=r, column=c), r - 23)
+
+# ---------------------------------------------------------------------------
+# TechOps Active Loans Detail (rows 325–424)
+# ---------------------------------------------------------------------------
+T_LN_T = 324   # title
+T_LN_H = 325   # header
+T_LN_S = 326   # first data
+T_LN_E = 425   # last data
+
+ws_t[f"A{T_LN_T}"] = "השאלות פעילות"
+ws_t[f"A{T_LN_T}"].font = TITLE_FONT_D
+
+t_loan_headers = ["מזהה", "מוצר", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
+for i, h in enumerate(t_loan_headers):
+    cell = ws_t.cell(row=T_LN_H, column=i + 1, value=h)
+    style_header(cell)
+style_header(ws_t.cell(row=T_LN_H, column=11, value="loan_ref"))
+
+T_LOAN_COND = f'({DI}!$D{DR}<>"")*({DI}!$X{DR}="מושאל")'
+t_loan_map = {"A": "D", "B": "B", "C": "Y", "D": "Z", "E": "AB"}
+
+for r in range(T_LN_S, T_LN_E + 1):
+    n = r - T_LN_S + 1
+    ws_t[f"K{r}"] = f'=IFERROR(SMALL(IF({T_LOAN_COND},{T_ROW_IDX},""),{n}),"")'
+    for dcol, icol in t_loan_map.items():
+        ws_t[f"{dcol}{r}"] = (
+            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+        )
+    ws_t[f"F{r}"] = (
+        f'=IF($K{r}="","",IF(AND('
+        f'INDEX({DI}!$AB{DR},$K{r})<>"",'
+        f'INDEX({DI}!$AB{DR},$K{r})<TODAY()),'
+        f'"באיחור!","תקין"))'
+    )
+    ws_t[f"E{r}"].number_format = "DD/MM/YYYY"
+    for c in range(1, 18):
+        style_data(ws_t.cell(row=r, column=c), r - T_LN_S)
+
+# Conditional formatting — overdue red
+ws_t.conditional_formatting.add(
+    f"F{T_LN_S}:F{T_LN_E}",
+    FormulaRule(formula=[f'F{T_LN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
+)
+ws_t.conditional_formatting.add(
+    f"A{T_LN_S}:F{T_LN_E}",
+    FormulaRule(formula=[f'$F{T_LN_S}="באיחור!"'], fill=RED_FILL_D),
+)
+
+
+# ===========================================================================
 # Save
 # ===========================================================================
 wb.save("ametrine_inventory.xlsx")

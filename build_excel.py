@@ -1267,6 +1267,128 @@ ws_t.conditional_formatting.add(
 
 
 # ===========================================================================
+# Build תכולה (Contents) sheet
+# ===========================================================================
+ws_c = wb["תכולה"]
+ws_c.sheet_view.rightToLeft = True
+
+cont_headers = [
+    "שם מוצר",       # A — dropdown from products
+    "פריט תכולה",    # B — free text
+    "כמות נדרשת",    # C — numeric
+    "הערות",          # D — free text
+]
+for i, h in enumerate(cont_headers):
+    cell = ws_c.cell(row=1, column=i + 1, value=h)
+    style_header(cell)
+
+cont_widths = {"A": 28, "B": 30, "C": 16, "D": 40}
+for col, w in cont_widths.items():
+    ws_c.column_dimensions[col].width = w
+
+ws_c.freeze_panes = "A2"
+
+# Style 30 empty data-entry rows
+for r in range(2, 32):
+    for c in range(1, 5):
+        style_data(ws_c.cell(row=r, column=c), r - 2)
+
+# C column: integer number format
+for r in range(2, 32):
+    ws_c[f"C{r}"].number_format = "0"
+
+
+# ===========================================================================
+# Build מלאי רצוי (Desired Inventory) sheet
+# ===========================================================================
+ws_di = wb["מלאי רצוי"]
+ws_di.sheet_view.rightToLeft = True
+
+di_headers = [
+    "שם מוצר",              # A — free text / dropdown
+    "גרסה",                 # B — free text
+    "סביבה/הדפס",           # C — free text (env or print name)
+    "סוג בד",               # D — free text / dropdown
+    "יעד חדר תצוגה",        # E — numeric target
+    "יעד תיק הדגמות",       # F — numeric target
+    "יעד השאלות",            # G — numeric target
+    "קיים - חדר תצוגה",     # H — COUNTIFS formula
+    "קיים - תיק",           # I — COUNTIFS formula
+    "קיים - השאלות",         # J — COUNTIFS formula
+    "חסר - חדר תצוגה",      # K — gap formula
+    "חסר - תיק",            # L — gap formula
+    "חסר - השאלות",          # M — gap formula
+]
+for i, h in enumerate(di_headers):
+    cell = ws_di.cell(row=1, column=i + 1, value=h)
+    style_header(cell)
+
+di_widths = {"A": 24, "B": 14, "C": 20, "D": 16, "E": 18,
+             "F": 18, "G": 16, "H": 20, "I": 16, "J": 18,
+             "K": 20, "L": 16, "M": 18}
+for col, w in di_widths.items():
+    ws_di.column_dimensions[col].width = w
+
+ws_di.freeze_panes = "A2"
+
+# Target columns: integer format
+for col in ("E", "F", "G"):
+    for r in range(2, 22):
+        ws_di[f"{col}{r}"].number_format = "0"
+
+# Formulas for 20 data-entry rows (rows 2–21)
+# COUNTIFS: count inventory items matching product + version + fabric + status
+# Hierarchical: specific filters (B, C, D) only apply when filled
+for r in range(2, 22):
+    # Base product match (mandatory)
+    prod_cond = f'{DI}!$B$2:$B$500,A{r}'
+
+    # Optional version condition
+    ver_cond = f'IF(B{r}<>"",COUNTIFS({prod_cond},{DI}!$C$2:$C$500,B{r},'
+    ver_else = f'COUNTIFS({prod_cond},'
+
+    # Optional fabric condition suffix
+    fab_if = f'{DI}!$G$2:$G$500,D{r},'
+    fab_else = ''
+
+    # Build COUNTIFS for each status
+    # Pattern: IF(D<>"", IF(B<>"", COUNTIFS(prod,ver,fab,status), COUNTIFS(prod,fab,status)),
+    #                    IF(B<>"", COUNTIFS(prod,ver,status), COUNTIFS(prod,status)))
+    for out_col, status in [("H", "בחדר תצוגה"), ("I", "בתיק הדגמה"), ("J", "מושאל")]:
+        stat_cond = f'{DI}!$X$2:$X$500,"{status}"'
+        ws_di[f"{out_col}{r}"] = (
+            f'=IF(A{r}="","",IF(D{r}<>"",'
+            f'IF(B{r}<>"",COUNTIFS({prod_cond},{DI}!$C$2:$C$500,B{r},{fab_if}{stat_cond}),'
+            f'COUNTIFS({prod_cond},{fab_if}{stat_cond})),'
+            f'IF(B{r}<>"",COUNTIFS({prod_cond},{DI}!$C$2:$C$500,B{r},{stat_cond}),'
+            f'COUNTIFS({prod_cond},{stat_cond}))))'
+        )
+
+    # Gap formulas: target - actual, minimum 0
+    for target_col, actual_col, gap_col in [("E", "H", "K"), ("F", "I", "L"), ("G", "J", "M")]:
+        ws_di[f"{gap_col}{r}"] = (
+            f'=IF(OR({target_col}{r}="",A{r}=""),"",MAX(0,{target_col}{r}-{actual_col}{r}))'
+        )
+
+    # Style all cells
+    for c in range(1, 14):
+        style_data(ws_di.cell(row=r, column=c), r - 2)
+
+# Conditional formatting: red fill when gap > 0
+GAP_RED = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+GAP_RED_FONT = Font(bold=True, color="9C0006")
+for gap_col in ("K", "L", "M"):
+    ws_di.conditional_formatting.add(
+        f"{gap_col}2:{gap_col}21",
+        FormulaRule(
+            formula=[f'{gap_col}2>0'],
+            font=GAP_RED_FONT,
+            fill=GAP_RED,
+        ),
+    )
+
+
+# ===========================================================================
 # Save
 # ===========================================================================
 wb.save("ametrine_inventory.xlsx")

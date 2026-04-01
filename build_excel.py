@@ -1,5 +1,5 @@
 from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protection
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
@@ -26,7 +26,7 @@ for name in sheet_names[1:]:
 # ---------------------------------------------------------------------------
 # Styling
 # ---------------------------------------------------------------------------
-HEADER_FONT = Font(bold=True, color="FFFFFF", size=11)
+HEADER_FONT = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
 HEADER_FILL = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
 HEADER_ALIGN = Alignment(horizontal="right", vertical="center", wrap_text=True)
 ROW_EVEN_FILL = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
@@ -41,14 +41,21 @@ THIN_BORDER = Border(
 YELLOW_FILL = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
 
+DATA_FONT = Font(name="Calibri", size=11)
+LOCKED = Protection(locked=True)
+UNLOCKED = Protection(locked=False)
+
+
 def style_header(cell):
     cell.font = HEADER_FONT
     cell.fill = HEADER_FILL
     cell.alignment = HEADER_ALIGN
     cell.border = THIN_BORDER
+    cell.protection = LOCKED
 
 
 def style_data(cell, row_idx):
+    cell.font = DATA_FONT
     cell.fill = ROW_EVEN_FILL if row_idx % 2 == 0 else ROW_ODD_FILL
     cell.alignment = CELL_ALIGN
     cell.border = THIN_BORDER
@@ -583,7 +590,7 @@ for r in range(5, 105):
 
 # --- Conditional formatting ---
 RED_FILL = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-RED_FONT = Font(bold=True, color="9C0006")
+RED_FONT = Font(name="Calibri", bold=True, color="9C0006")
 
 # Overdue text in column I — red bold font
 ws_l.conditional_formatting.add(
@@ -606,11 +613,11 @@ ws_d.sheet_view.rightToLeft = True
 
 # --- Dashboard-specific styles ---
 FILTER_BG = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
-FILTER_FONT = Font(bold=True, color="FFFFFF", size=11)
+FILTER_FONT = Font(name="Calibri", bold=True, color="FFFFFF", size=11)
 FILTER_VAL_FILL = PatternFill(start_color="D6E4F0", end_color="D6E4F0", fill_type="solid")
-TITLE_FONT_D = Font(bold=True, size=14, color="1F3864")
-METRIC_LABEL_FONT = Font(bold=True, size=11, color="1F3864")
-METRIC_VAL_FONT = Font(bold=True, size=16, color="1F3864")
+TITLE_FONT_D = Font(name="Calibri", bold=True, size=14, color="1F3864")
+METRIC_LABEL_FONT = Font(name="Calibri", bold=True, size=11, color="1F3864")
+METRIC_VAL_FONT = Font(name="Calibri", bold=True, size=16, color="1F3864")
 SUMMARY_BG = PatternFill(start_color="E9EFF7", end_color="E9EFF7", fill_type="solid")
 
 # --- Filter Area (rows 1–4) ---
@@ -756,7 +763,7 @@ ws_d["D17"] = (
     f'{DI}!$M{DR},({DI}!$D{DR}<>"")*({DI}!$AE{DR}=FALSE)'
     f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))),""))'
 )
-ws_d["D17"].font = Font(size=10, color="1F3864")
+ws_d["D17"].font = Font(name="Calibri", size=10, color="1F3864")
 ws_d["D17"].alignment = CELL_ALIGN
 ws_d["D17"].fill = SUMMARY_BG
 ws_d["D17"].border = THIN_BORDER
@@ -862,7 +869,7 @@ for r in range(LOAN_S, LOAN_E + 1):
 
 # Conditional formatting — overdue loans red highlight
 RED_FILL_D = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-RED_FONT_D = Font(bold=True, color="9C0006")
+RED_FONT_D = Font(name="Calibri", bold=True, color="9C0006")
 ws_d.conditional_formatting.add(
     f"F{LOAN_S}:F{LOAN_E}",
     FormulaRule(formula=[f'F{LOAN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
@@ -1148,7 +1155,7 @@ ws_t["D19"] = (
     f'{DI}!$M{DR},({DI}!$D{DR}<>"")*({T_ENV_FALSE})'
     f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))),""))'
 )
-ws_t["D19"].font = Font(size=10, color="1F3864")
+ws_t["D19"].font = Font(name="Calibri", size=10, color="1F3864")
 ws_t["D19"].alignment = CELL_ALIGN
 ws_t["D19"].fill = SUMMARY_BG
 ws_t["D19"].border = THIN_BORDER
@@ -1376,7 +1383,7 @@ for r in range(2, 22):
 
 # Conditional formatting: red fill when gap > 0
 GAP_RED = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
-GAP_RED_FONT = Font(bold=True, color="9C0006")
+GAP_RED_FONT = Font(name="Calibri", bold=True, color="9C0006")
 for gap_col in ("K", "L", "M"):
     ws_di.conditional_formatting.add(
         f"{gap_col}2:{gap_col}21",
@@ -1386,6 +1393,82 @@ for gap_col in ("K", "L", "M"):
             fill=GAP_RED,
         ),
     )
+
+
+# ===========================================================================
+# Protection & Final Touches
+# ===========================================================================
+
+# --- Inventory sheet (ws) ---
+# Lock all cells first, then unlock input columns
+for r in range(1, MR + 1):
+    for c in range(1, 36):
+        ws.cell(row=r, column=c).protection = LOCKED
+# Unlock input columns for data rows 2–500
+# Input cols: A-D (1-4), F-P (6-16), U-W (21-23), X-AD (24-30)
+inv_input_cols = list(range(1, 5)) + list(range(6, 17)) + list(range(21, 24)) + list(range(24, 31))
+for r in range(2, MR + 1):
+    for c in inv_input_cols:
+        ws.cell(row=r, column=c).protection = UNLOCKED
+ws.protection.sheet = True
+ws.protection.password = "1998"
+ws.protection.enable()
+
+# --- Settings sheet (ws_s) — all locked ---
+ws_s = wb["הגדרות"]
+ws_s.protection.sheet = True
+ws_s.protection.password = "1998"
+ws_s.protection.enable()
+
+# --- Dashboard (ws_d) — unlock only filter cells ---
+# Filter cells: A2, B2, C2, D2, E2, F2, A4, B4, C4, D4, E4
+dash_unlock = ["A2", "B2", "C2", "D2", "E2", "F2",
+               "A4", "B4", "C4", "D4", "E4"]
+for ref in dash_unlock:
+    ws_d[ref].protection = UNLOCKED
+ws_d.protection.sheet = True
+ws_d.protection.password = "1998"
+ws_d.protection.enable()
+
+# --- TechOps Dashboard (ws_t) — unlock filter cells + tech filters ---
+tech_unlock = dash_unlock + ["A6", "B6", "C6", "D6", "E6", "F6", "G6"]
+for ref in tech_unlock:
+    ws_t[ref].protection = UNLOCKED
+ws_t.protection.sheet = True
+ws_t.protection.password = "1998"
+ws_t.protection.enable()
+
+# --- Loans (ws_l) — unlock filter cells ---
+for ref in ["A2", "B2", "C2", "D2"]:
+    ws_l[ref].protection = UNLOCKED
+ws_l.protection.sheet = True
+ws_l.protection.password = "1998"
+ws_l.protection.enable()
+
+# --- Tech Values (ws_tv) — unlock input columns A, F, G, I, J, K ---
+tv_input_cols = [1, 6, 7, 9, 10, 11]  # A, F, G, I, J, K
+for r in range(2, 501):
+    for c in tv_input_cols:
+        ws_tv.cell(row=r, column=c).protection = UNLOCKED
+ws_tv.protection.sheet = True
+ws_tv.protection.password = "1998"
+ws_tv.protection.enable()
+
+# --- Contents (ws_c) — unlock all data cells A2:D31 ---
+for r in range(2, 32):
+    for c in range(1, 5):
+        ws_c.cell(row=r, column=c).protection = UNLOCKED
+ws_c.protection.sheet = True
+ws_c.protection.password = "1998"
+ws_c.protection.enable()
+
+# --- Desired Inventory (ws_di) — unlock input cols A-G, lock H-M ---
+for r in range(2, 22):
+    for c in range(1, 8):  # A-G
+        ws_di.cell(row=r, column=c).protection = UNLOCKED
+ws_di.protection.sheet = True
+ws_di.protection.password = "1998"
+ws_di.protection.enable()
 
 
 # ===========================================================================

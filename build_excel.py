@@ -459,13 +459,21 @@ filter_labels = ["מדינה", "מושאל ל", "אחראי מהחברה", "בא
 for i, label in enumerate(filter_labels):
     cell = ws_l.cell(row=1, column=i + 1, value=label)
     style_header(cell)
-    # Empty filter value cell below
-    val_cell = ws_l.cell(row=2, column=i + 1)
+    # Filter value cell with "הכל" default
+    val_cell = ws_l.cell(row=2, column=i + 1, value="הכל")
+    val_cell.fill = ROW_EVEN_FILL
     val_cell.border = THIN_BORDER
     val_cell.alignment = CELL_ALIGN
 
-# D2: Overdue filter — Yes/No dropdown
-dv = DataValidation(type="list", formula1="כן_לא", allow_blank=True)
+# A2 (מדינה): dropdown with common countries
+dv = DataValidation(type="list",
+    formula1='"הכל,ישראל,ארה\"ב,גרמניה,צרפת,בריטניה,הודו,קנדה,אוסטרליה,אחר"',
+    allow_blank=True)
+dv.sqref = "A2"
+ws_l.add_data_validation(dv)
+
+# D2 (באיחור): dropdown
+dv = DataValidation(type="list", formula1='"הכל,כן,לא"', allow_blank=True)
 dv.sqref = "D2"
 ws_l.add_data_validation(dv)
 
@@ -515,10 +523,10 @@ OVERDUE_CHECK = (
 )
 FILTER_COND = (
     f"({INV}!$X$2:$X$500=\"מושאל\")"
-    f"*(IF($A$2=\"\",1,{INV}!$Z$2:$Z$500=$A$2))"
-    f"*(IF($B$2=\"\",1,{INV}!$Y$2:$Y$500=$B$2))"
-    f"*(IF($C$2=\"\",1,{INV}!$AA$2:$AA$500=$C$2))"
-    f"*(IF($D$2=\"\",1,IF($D$2=\"כן\",{OVERDUE_CHECK},1-{OVERDUE_CHECK})))"
+    f"*(IF($A$2=\"הכל\",1,{INV}!$Z$2:$Z$500=$A$2))"
+    f"*(IF($B$2=\"הכל\",1,{INV}!$Y$2:$Y$500=$B$2))"
+    f"*(IF($C$2=\"הכל\",1,{INV}!$AA$2:$AA$500=$C$2))"
+    f"*(IF($D$2=\"הכל\",1,IF($D$2=\"כן\",{OVERDUE_CHECK},1-{OVERDUE_CHECK})))"
 )
 ROW_INDEX_ARRAY = f"ROW({INV}!$A$2:$A$500)-ROW({INV}!$A$2)+1"
 
@@ -636,8 +644,10 @@ dv_defs = [
     ("B2", '"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,'
            'Blankets,Urban,Platform On-The-Move,Accessories"'),
     ("E2", '"הכל,Sahar,Inbar,SRV,Gabardine,Meron,Arber,IRR,'
-           'Polar,Nylon,Mesh,PVC,Other"'),
-    ("F2", '"הכל,S,M,L,XL,XXL,One Size,N/A"'),
+           'Polar,Nylon,Mesh,PVC,Other,RIPSTOP,RIPSTOP Double Layer,'
+           'Beti,MRG,3D,WaterProof Blackout Fabric,רשת רכב,'
+           'Stretch,Durable,SMT,LOKI Material,אחר"'),
+    ("F2", '"הכל,XS,S,M,L,XL,XXL,XXXL,One Size,N/A"'),
     ("A4", '"הכל,במלאי,מושאל,בחדר תצוגה,בתיק הדגמה"'),
     ("C4", '"הכל,כן,לא"'),
     ("D4", '"הכל,כן,לא"'),
@@ -769,8 +779,8 @@ for i, h in enumerate(detail_headers):
 style_header(ws_d.cell(row=20, column=11, value="row_ref"))
 ws_d.column_dimensions["K"].hidden = True
 
-# Freeze below detail headers
-ws_d.freeze_panes = "A21"
+# Freeze rows 1-4 (filters stay visible when scrolling)
+ws_d.freeze_panes = "A5"
 
 # SMALL/IF row-index formula shared components
 D_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
@@ -808,7 +818,7 @@ LOAN_E = 423        # last data row
 ws_d[f"A{LOAN_T}"] = "השאלות פעילות"
 ws_d[f"A{LOAN_T}"].font = TITLE_FONT_D
 
-loan_d_headers = ["מזהה", "מוצר", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
+loan_d_headers = ["מזהה", "מוצר", "גרסה", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
 for i, h in enumerate(loan_d_headers):
     cell = ws_d.cell(row=LOAN_H, column=i + 1, value=h)
     style_header(cell)
@@ -819,7 +829,7 @@ style_header(ws_d.cell(row=LOAN_H, column=11, value="loan_ref"))
 # Loan filter: status = מושאל (always, no dashboard filter)
 LOAN_COND = f'({DI}!$D{DR}<>"")*({DI}!$X{DR}="מושאל")'
 
-loan_d_map = {"A": "D", "B": "B", "C": "Y", "D": "Z", "E": "AB"}
+loan_d_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 
 for r in range(LOAN_S, LOAN_E + 1):
     n = r - LOAN_S + 1
@@ -827,22 +837,22 @@ for r in range(LOAN_S, LOAN_E + 1):
     # K: helper
     ws_d[f"K{r}"] = f'=IFERROR(SMALL(IF({LOAN_COND},{D_ROW_IDX},""),{n}),"")'
 
-    # A–E: pull data
+    # A–F: pull data
     for dcol, icol in loan_d_map.items():
         ws_d[f"{dcol}{r}"] = (
             f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
         )
 
-    # F: overdue indicator
-    ws_d[f"F{r}"] = (
+    # G: overdue indicator
+    ws_d[f"G{r}"] = (
         f'=IF($K{r}="","",IF(AND('
         f'INDEX({DI}!$AB{DR},$K{r})<>"",'
         f'INDEX({DI}!$AB{DR},$K{r})<TODAY()),'
         f'"באיחור!","תקין"))'
     )
 
-    # Date formatting for expected return (E)
-    ws_d[f"E{r}"].number_format = "DD/MM/YYYY"
+    # Date formatting for expected return (F)
+    ws_d[f"F{r}"].number_format = "DD/MM/YYYY"
 
     # Style
     for c in range(1, 12):
@@ -852,12 +862,12 @@ for r in range(LOAN_S, LOAN_E + 1):
 RED_FILL_D = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 RED_FONT_D = Font(name="Calibri", bold=True, color="9C0006")
 ws_d.conditional_formatting.add(
-    f"F{LOAN_S}:F{LOAN_E}",
-    FormulaRule(formula=[f'F{LOAN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
+    f"G{LOAN_S}:G{LOAN_E}",
+    FormulaRule(formula=[f'G{LOAN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
 )
 ws_d.conditional_formatting.add(
-    f"A{LOAN_S}:F{LOAN_E}",
-    FormulaRule(formula=[f'$F{LOAN_S}="באיחור!"'], fill=RED_FILL_D),
+    f"A{LOAN_S}:G{LOAN_E}",
+    FormulaRule(formula=[f'$G{LOAN_S}="באיחור!"'], fill=RED_FILL_D),
 )
 
 
@@ -1196,14 +1206,14 @@ T_LN_E = 425   # last data
 ws_t[f"A{T_LN_T}"] = "השאלות פעילות"
 ws_t[f"A{T_LN_T}"].font = TITLE_FONT_D
 
-t_loan_headers = ["מזהה", "מוצר", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
+t_loan_headers = ["מזהה", "מוצר", "גרסה", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
 for i, h in enumerate(t_loan_headers):
     cell = ws_t.cell(row=T_LN_H, column=i + 1, value=h)
     style_header(cell)
 style_header(ws_t.cell(row=T_LN_H, column=11, value="loan_ref"))
 
 T_LOAN_COND = f'({DI}!$D{DR}<>"")*({DI}!$X{DR}="מושאל")'
-t_loan_map = {"A": "D", "B": "B", "C": "Y", "D": "Z", "E": "AB"}
+t_loan_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 
 for r in range(T_LN_S, T_LN_E + 1):
     n = r - T_LN_S + 1
@@ -1212,24 +1222,24 @@ for r in range(T_LN_S, T_LN_E + 1):
         ws_t[f"{dcol}{r}"] = (
             f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
         )
-    ws_t[f"F{r}"] = (
+    ws_t[f"G{r}"] = (
         f'=IF($K{r}="","",IF(AND('
         f'INDEX({DI}!$AB{DR},$K{r})<>"",'
         f'INDEX({DI}!$AB{DR},$K{r})<TODAY()),'
         f'"באיחור!","תקין"))'
     )
-    ws_t[f"E{r}"].number_format = "DD/MM/YYYY"
+    ws_t[f"F{r}"].number_format = "DD/MM/YYYY"
     for c in range(1, 18):
         style_data(ws_t.cell(row=r, column=c), r - T_LN_S)
 
 # Conditional formatting — overdue red
 ws_t.conditional_formatting.add(
-    f"F{T_LN_S}:F{T_LN_E}",
-    FormulaRule(formula=[f'F{T_LN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
+    f"G{T_LN_S}:G{T_LN_E}",
+    FormulaRule(formula=[f'G{T_LN_S}="באיחור!"'], font=RED_FONT_D, fill=RED_FILL_D),
 )
 ws_t.conditional_formatting.add(
-    f"A{T_LN_S}:F{T_LN_E}",
-    FormulaRule(formula=[f'$F{T_LN_S}="באיחור!"'], fill=RED_FILL_D),
+    f"A{T_LN_S}:G{T_LN_E}",
+    FormulaRule(formula=[f'$G{T_LN_S}="באיחור!"'], fill=RED_FILL_D),
 )
 
 
@@ -1359,6 +1369,15 @@ for gap_col in ("K", "L", "M"):
 # Protection & Final Touches
 # ===========================================================================
 
+# --- Task 5A: Hide secret sheets ---
+wb["ערכים טכנולוגיים"].sheet_state = "hidden"
+wb["לוח בקרה טכנו-מבצעי"].sheet_state = "hidden"
+
+# --- Task 5B/5C: Hide helper columns ---
+# Inventory AE-AI already hidden above (lines 267-268)
+# Dashboard K already hidden above
+# Loans K already hidden above
+
 # --- Inventory sheet (ws) ---
 # Lock all cells first, then unlock input columns
 for r in range(1, MR + 1):
@@ -1374,8 +1393,16 @@ ws.protection.sheet = True
 ws.protection.password = "1998"
 ws.protection.enable()
 
-# --- Settings sheet (ws_s) — all locked ---
+# --- Settings sheet (ws_s) — data cells unlocked, headers locked ---
 ws_s = wb["הגדרות"]
+# Unlock all data cells (non-header rows) in the settings sheet
+for row in ws_s.iter_rows(min_row=1, max_row=ws_s.max_row, max_col=ws_s.max_column):
+    for cell in row:
+        if cell.font and cell.font.color and hasattr(cell.font.color, 'rgb') and cell.font.color.rgb == "00FFFFFF":
+            # Header cell (white text) — keep locked
+            cell.protection = LOCKED
+        else:
+            cell.protection = UNLOCKED
 ws_s.protection.sheet = True
 ws_s.protection.password = "1998"
 ws_s.protection.enable()

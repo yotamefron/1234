@@ -124,6 +124,8 @@ prints_data = [
     ["Marine", "ימי", None, None],
     ["Urban", "מבולדר/שטח בנוי", None, None],
     ["Boulder", "מבולדר/שטח בנוי", None, None],
+    ["NATO", "מיוער", None, None],
+    ["Kestrel (אמריקאי)", "מיוער", None, None],
 ]
 cr, pr_start, pr_end = write_table(ws_s, cr, 1,
     ["הדפס", "סביבה ראשית", "סביבה משנית", "תמונה"], prints_data, "הדפסים")
@@ -151,18 +153,41 @@ t4_data = [
     ["OverGarment", "Poncho Inbar 3D", ""],
     ["OverGarment", "Poncho Sahar", ""],
     ["OverGarment", "Poncho Sahar 3D", ""],
+    ["OverGarment", "Arctic Jacket", ""],
+    ["OverGarment", "Arctic Overpants", ""],
+    ["OverGarment", "Arctic Poncho SRV", ""],
+    ["OverGarment", "Gaiters", ""],
+    ["OverGarment", "Poncho SRV Short", ""],
     ["Hide Site", "Hide Site Standard", ""],
     ["Hide Site", "HS Floor", ""],
     ["Hide Site", "Window Kit", ""],
+    ["Hide Site", "Operators HS", ""],
+    ["Hide Site", "OverWatch (ATGM) HS", ""],
+    ["Hide Site", "6X6 Hide Site", ""],
+    ["Hide Site", "עמדת חוד", ""],
     ["Platform Hide Site", "Platform HS (including parts)", ""],
+    ["Platform Hide Site", "LC79", ""],
+    ["Platform Hide Site", "GMV", ""],
+    ["Platform Hide Site", "רשת הצללה", ""],
     ["Uniform", "Shirt", ""],
     ["Uniform", "Pants", ""],
+    ["Uniform", "Headcover", ""],
+    ["Uniform", "Balaclava", ""],
+    ["Uniform", "Boonie hat", ""],
+    ["Uniform", "Vest cover", ""],
     ["Blankets", "Survival Blanket", ""],
     ["Blankets", "יריעת החשכה", ""],
+    ["Blankets", "Water Proof Survival Blanket", ""],
+    ["Blankets", "3D Survival Blanket", ""],
+    ["Blankets", "Arctic Survival Blanket", ""],
     ["Urban", "Loki", ""],
     ["Platform On-The-Move", "GMV", ""],
     ["Platform On-The-Move", "רשת הצללה", ""],
     ["Accessories", "Accessories", ""],
+    ["Accessories", "HS Floor", ""],
+    ["Accessories", "חלקים של עמדות", ""],
+    ["Accessories", "Blackout hood", ""],
+    ["Accessories", "Weapon Wraps", ""],
 ]
 cr, prod_start, prod_end = write_table(ws_s, cr, 1,
     ["קו מוצר", "שם מוצר", "גרסאות זמינות"], t4_data, "מוצרים")
@@ -184,7 +209,10 @@ add_named(sanitize(cur_pl), f"'הגדרות'!$B${pl_first}:$B${prod_start + len(
 # TABLE 5 — Fabric Types
 cr, _, _ = write_table(ws_s, cr, 1, ["סוג בד"],
     [["Sahar"], ["Inbar"], ["SRV"], ["Gabardine"], ["Meron"], ["Arber"],
-     ["IRR"], ["Polar"], ["Nylon"], ["Mesh"], ["PVC"], ["Other"]],
+     ["IRR"], ["Polar"], ["Nylon"], ["Mesh"], ["PVC"], ["Other"],
+     ["RIPSTOP"], ["RIPSTOP Double Layer"], ["Beti"], ["MRG"], ["3D"],
+     ["WaterProof Blackout Fabric"], ["רשת רכב"], ["Stretch"],
+     ["Durable"], ["SMT"], ["LOKI Material"], ["אחר"]],
     "סוגי_בד")
 
 # TABLE 6 — Statuses
@@ -196,12 +224,45 @@ cr, _, _ = write_table(ws_s, cr, 1, ["ערך"], [["כן"], ["לא"]], "כן_לא
 
 # TABLE 8 — Sizes
 cr, _, _ = write_table(ws_s, cr, 1, ["מידה"],
-    [["S"], ["M"], ["L"], ["XL"], ["XXL"], ["One Size"], ["N/A"]], "מידות")
+    [["XS"], ["S"], ["M"], ["L"], ["XL"], ["XXL"], ["XXXL"], ["One Size"], ["N/A"]], "מידות")
 
 # TABLE 9 — SKU mapping
+sku_data = [
+    ["Poncho Sahar", "Mesh", "V1", "7031-01"],
+    ["Poncho Sahar", "Mesh", "V2", "7031-01"],
+    ["Poncho Inbar", "RIPSTOP", "V1", "7030-01"],
+    ["Poncho SRV", "RIPSTOP", "V1", "7018-00"],
+    ["Poncho SRV", "RIPSTOP", "Short", "7018-00"],
+    ["Poncho SRV", "RIPSTOP Double Layer", "Short V2", "7018-00"],
+    ["Hobey Elite", "Mesh", "V1", "7021-00"],
+    ["Hobey Elite", "RIPSTOP", "V1", "7021-00"],
+    ["Gal Suit", "Mesh", "V1", "7004-01"],
+    ["Sniper Assault", "3D", "V1", "7033-00"],
+    ["SWAT 3-Part SUIT", "Mesh", "V1", "9097-00"],
+    ["May Suit", "RIPSTOP Double Layer", "V1", "7040-01"],
+    ["Arctic Jacket", "RIPSTOP Double Layer", "V1", "7051-00"],
+    ["Arctic Overpants", "RIPSTOP Double Layer", "V1", "7052-00"],
+    ["Gaiters", "Mesh", "V1", "5004-00"],
+    ["Gaiters", "RIPSTOP Double Layer", "V1", "5004-00"],
+    ["Headcover", "Stretch", "", "8030-00"],
+    ["Headcover", "Meron", "", "8030-00"],
+    ["Balaclava", "Stretch", "", "8006-00"],
+    ["Operators HS", "רשת רכב", "V1", "9001-00"],
+    ["Operators HS", "MRG", "V1", "9001-00"],
+    ["Operators HS", "RIPSTOP Double Layer", "V1", "9001-00"],
+    ["Operators HS", "Mesh", "V1", "9001-00"],
+    ["OverWatch (ATGM) HS", "רשת רכב", "V1", "9004-01"],
+    ["OverWatch (ATGM) HS", "Beti", "V1", "9004-01"],
+    ["6X6 Hide Site", "MRG", "", "9095-00"],
+    ["6X6 Hide Site", "Beti", "", "9095-00"],
+    ["LC79", "רשת רכב", "V1", "9026-00"],
+    ["Survival Blanket", "Mesh", "V1", "9021-00"],
+    ["Survival Blanket", "RIPSTOP", "V1", "9021-00"],
+    ["Water Proof Survival Blanket", "RIPSTOP", "V1", "9028-00"],
+    ["3D Survival Blanket", "Mesh", "V1", "9029-00"],
+]
 cr, sku_start, sku_end = write_table(ws_s, cr, 1,
-    ["מוצר", "סוג בד", "גרסה", 'מק"ט'],
-    [["", "", "", ""] for _ in range(20)], "מקטים")
+    ["מוצר", "סוג בד", "גרסה", 'מק"ט'], sku_data, "מקטים")
 
 
 # ===========================================================================
@@ -315,12 +376,15 @@ for col_letter in ("F", "AB"):
     for r in range(2, MR + 1):
         ws[f"{col_letter}{r}"].number_format = "DD/MM/YYYY"
 
-# --- Formulas (written per data row; sample rows 2–6, expandable) ---
-PRINTS_RANGE = f"'הגדרות'!$A${pr_start}:$D${pr_end}"
-SKU_A = f"'הגדרות'!$A${sku_start}:$A${sku_end}"
-SKU_B = f"'הגדרות'!$B${sku_start}:$B${sku_end}"
-SKU_C = f"'הגדרות'!$C${sku_start}:$C${sku_end}"
-SKU_D = f"'הגדרות'!$D${sku_start}:$D${sku_end}"
+# --- Formulas (written per data row) ---
+# Padded ranges for future entries
+PRINTS_PAD_END = pr_end + 5   # room for ~5 more prints
+SKU_PAD_END = sku_end + 50    # room for ~50 more SKUs
+PRINTS_RANGE = f"'הגדרות'!$A${pr_start}:$D${PRINTS_PAD_END}"
+SKU_A = f"'הגדרות'!$A${sku_start}:$A${SKU_PAD_END}"
+SKU_B = f"'הגדרות'!$B${sku_start}:$B${SKU_PAD_END}"
+SKU_C = f"'הגדרות'!$C${sku_start}:$C${SKU_PAD_END}"
+SKU_D = f"'הגדרות'!$D${sku_start}:$D${SKU_PAD_END}"
 
 FORMULA_ROWS = range(2, MR + 1)
 
@@ -382,90 +446,7 @@ ws.conditional_formatting.add(
     ),
 )
 
-# --- 5 Sample data rows ---
-samples = [
-    {  # Row 2 — Poncho Inbar with Desert print → special note
-        "A": "OverGarment", "B": "Poncho Inbar", "C": "",
-        "D": "INV-001", "F": datetime.date(2025, 11, 10),
-        "G": "Inbar", "H": "", "I": "L",
-        "J": "לא", "K": "כן", "L": "",
-        "M": "Desert", "N": "Forest Green",
-        "O": "לא", "P": "כן",
-        "U": "כן", "V": "כן", "W": "כן",
-        "X": "במלאי", "Y": "", "Z": "ישראל",
-        "AA": "", "AC": "הדפס Desert ישן — אינו תקין ויזואלית",
-        "AD": "לא",
-    },
-    {  # Row 3 — Hide Site, loaned, overdue
-        "A": "Hide Site", "B": "Hide Site Standard", "C": "",
-        "D": "INV-002", "F": datetime.date(2025, 8, 1),
-        "G": "Sahar", "H": "Gabardine", "I": "One Size",
-        "J": "לא", "K": "כן", "L": "",
-        "M": "Woodland", "N": "",
-        "O": "כן", "P": "",
-        "U": "כן", "V": "", "W": "כן",
-        "X": "מושאל", "Y": "צה\"ל", "Z": "ישראל",
-        "AA": "יוסי כהן", "AB": datetime.date(2026, 2, 15),
-        "AC": "", "AD": "לא",
-    },
-    {  # Row 4 — Uniform, in showroom, final version = לא → yellow note
-        "A": "Uniform", "B": "Shirt", "C": "",
-        "D": "INV-003", "F": "",
-        "G": "Meron", "H": "", "I": "M",
-        "J": "לא", "K": "לא", "L": "דורש בדיקה נוספת",
-        "M": "Urban Green", "N": "Urban",
-        "O": "כן", "P": "כן",
-        "U": "כן", "V": "כן", "W": "כן",
-        "X": "בחדר תצוגה", "Y": "", "Z": "ישראל",
-        "AA": "", "AC": "גרסת ביניים — ממתין לאישור סופי",
-        "AD": "לא",
-    },
-    {  # Row 5 — Blankets, in stock, dev version, final = לא → yellow note
-        "A": "Blankets", "B": "Survival Blanket", "C": "",
-        "D": "INV-004", "F": "",
-        "G": "IRR", "H": "", "I": "One Size",
-        "J": "כן", "K": "לא", "L": "פרוטוטייפ",
-        "M": "Fresh Snow", "N": "",
-        "O": "כן", "P": "",
-        "U": "לא", "V": "", "W": "כן",
-        "X": "במלאי", "Y": "", "Z": "ישראל",
-        "AA": "", "AC": "דגם ניסיוני — לא לשלוח ללקוח",
-        "AD": "לא",
-    },
-    {  # Row 6 — OverGarment, loaned abroad, overdue
-        "A": "OverGarment", "B": "Hobey Elite", "C": "",
-        "D": "INV-005", "F": datetime.date(2025, 12, 1),
-        "G": "SRV", "H": "Arber", "I": "XL",
-        "J": "לא", "K": "כן", "L": "",
-        "M": "Sand", "N": "Ever-Green",
-        "O": "כן", "P": "כן",
-        "U": "כן", "V": "כן", "W": "כן",
-        "X": "מושאל", "Y": "לוקהיד מרטין", "Z": "ארה\"ב",
-        "AA": "דני לוי", "AB": datetime.date(2026, 1, 10),
-        "AC": "", "AD": "לא",
-    },
-]
-
-# Column letter → column index mapping
-COL = {}
-for i in range(1, 36):
-    COL[get_column_letter(i)] = i
-
-for idx, sample in enumerate(samples):
-    r = idx + 2
-    for col_letter, value in sample.items():
-        if value == "":
-            continue
-        cell = ws.cell(row=r, column=COL[col_letter], value=value)
-        style_data(cell, idx)
-        if col_letter in ("F", "AB") and isinstance(value, datetime.date):
-            cell.number_format = "DD/MM/YYYY"
-
-    # Style remaining cells in the row (formula cells, empty cells)
-    for c in range(1, 36):
-        cell = ws.cell(row=r, column=c)
-        if cell.fill == PatternFill():  # unstyled
-            style_data(cell, idx)
+# No sample data — inventory starts empty
 
 # ===========================================================================
 # Build השאלות (Loans) sheet
@@ -945,28 +926,7 @@ for r in range(2, 501):
     # N: combined avg
     ws_tv[f"N{r}"] = f'=IF(OR(L{r}="",M{r}=""),"",AVERAGE(L{r},M{r}))'
 
-# --- 5 sample rows (manual columns: A, F, G, I, J, K) ---
-tv_samples = [
-    # (ID, MWIR_A, LWIR_A, MWIR_B, LWIR_B, Novel)
-    ("INV-001", 0.85, 0.78, 0.72, 0.65, "לא"),
-    ("INV-002", 0.91, 0.83, None, None, "כן"),
-    ("INV-003", 0.76, 0.71, 0.79, 0.74, "לא"),
-    ("INV-004", 0.95, 0.89, None, None, "כן"),
-    ("INV-005", 0.88, 0.82, 0.73, 0.68, "לא"),
-]
-for idx, (sid, mwir_a, lwir_a, mwir_b, lwir_b, novel) in enumerate(tv_samples):
-    r = idx + 2
-    ws_tv[f"A{r}"] = sid
-    ws_tv[f"F{r}"] = mwir_a
-    ws_tv[f"G{r}"] = lwir_a
-    if mwir_b is not None:
-        ws_tv[f"I{r}"] = mwir_b
-    if lwir_b is not None:
-        ws_tv[f"J{r}"] = lwir_b
-    ws_tv[f"K{r}"] = novel
-    # Style entire row
-    for c in range(1, 15):
-        style_data(ws_tv.cell(row=r, column=c), idx)
+# No sample data — tech values starts empty
 
 
 # ===========================================================================

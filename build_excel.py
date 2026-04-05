@@ -885,31 +885,33 @@ tv_headers = [
     "הדפס צד A",     # E — formula
     "MWIR צד A",     # F — manual numeric
     "LWIR צד A",     # G — manual numeric
-    "הדפס צד B",     # H — formula
-    "MWIR צד B",     # I — manual numeric
-    "LWIR צד B",     # J — manual numeric
-    "נובל",           # K — Yes/No dropdown
-    "ממוצע MWIR",    # L — formula
-    "ממוצע LWIR",    # M — formula
-    "ממוצע משולב",   # N — formula
+    "NIR צד A",      # H — manual numeric
+    "הדפס צד B",     # I — formula
+    "MWIR צד B",     # J — manual numeric
+    "LWIR צד B",     # K — manual numeric
+    "NIR צד B",      # L — manual numeric
+    "נובל",           # M — Yes/No dropdown
+    "ממוצע MWIR",    # N — formula
+    "ממוצע LWIR",    # O — formula
+    "ממוצע משולב",   # P — formula
 ]
 for i, h in enumerate(tv_headers):
     cell = ws_tv.cell(row=1, column=i + 1, value=h)
     style_header(cell)
 
-tv_widths = [16, 24, 12, 18, 18, 14, 14, 18, 14, 14, 10, 16, 16, 16]
+tv_widths = [16, 24, 12, 18, 18, 14, 14, 14, 18, 14, 14, 14, 10, 16, 16, 16]
 for i, w in enumerate(tv_widths):
     ws_tv.column_dimensions[get_column_letter(i + 1)].width = w
 
 ws_tv.freeze_panes = "A2"
 
-# Data validation: Novel (K) = Yes/No
+# Data validation: Novel (M) = Yes/No
 dv = DataValidation(type="list", formula1="כן_לא", allow_blank=True)
-dv.sqref = "K2:K500"
+dv.sqref = "M2:M500"
 ws_tv.add_data_validation(dv)
 
-# Number format for MWIR/LWIR columns
-for col in ("F", "G", "I", "J", "L", "M", "N"):
+# Number format for numeric columns
+for col in ("F", "G", "H", "J", "K", "L", "N", "O", "P"):
     for r in range(2, 501):
         ws_tv[f"{col}{r}"].number_format = "0.00"
 
@@ -927,14 +929,14 @@ for r in range(2, 501):
     ws_tv[f"D{r}"] = f'=IFERROR(INDEX({DI}!$A$2:$A$500,{MR_TV}),"")'
     # E: print A
     ws_tv[f"E{r}"] = f'=IFERROR(INDEX({DI}!$M$2:$M$500,{MR_TV}),"")'
-    # H: print B
-    ws_tv[f"H{r}"] = f'=IFERROR(INDEX({DI}!$N$2:$N$500,{MR_TV}),"")'
-    # L: avg MWIR (average both sides if B exists, else A only)
-    ws_tv[f"L{r}"] = f'=IF(F{r}="","",IF(I{r}<>"",AVERAGE(F{r},I{r}),F{r}))'
-    # M: avg LWIR
-    ws_tv[f"M{r}"] = f'=IF(G{r}="","",IF(J{r}<>"",AVERAGE(G{r},J{r}),G{r}))'
-    # N: combined avg
-    ws_tv[f"N{r}"] = f'=IF(OR(L{r}="",M{r}=""),"",AVERAGE(L{r},M{r}))'
+    # I: print B
+    ws_tv[f"I{r}"] = f'=IFERROR(INDEX({DI}!$N$2:$N$500,{MR_TV}),"")'
+    # N: avg MWIR (average both sides if B exists, else A only)
+    ws_tv[f"N{r}"] = f'=IF(F{r}="","",IF(J{r}<>"",AVERAGE(F{r},J{r}),F{r}))'
+    # O: avg LWIR
+    ws_tv[f"O{r}"] = f'=IF(G{r}="","",IF(K{r}<>"",AVERAGE(G{r},K{r}),G{r}))'
+    # P: combined avg
+    ws_tv[f"P{r}"] = f'=IF(OR(N{r}="",O{r}=""),"",AVERAGE(N{r},O{r}))'
 
 # No sample data — tech values starts empty
 
@@ -1029,17 +1031,17 @@ BF_T = (f'{F_DATA}*({T_ENV})'
 TMATCH = f'MATCH({DI}!$D{DR},{TV}!$A{DR},0)'
 
 # Tech filter conditions (appended to BF_T)
-# Novel (A6)
-TF_NOV = f'IF($A$6="הכל",1,IFERROR(--( INDEX({TV}!$K{DR},{TMATCH})=$A$6),0))'
-# MWIR avg (col L) min/max (B6/C6)
-TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!$L{DR},{TMATCH})>=$B$6),0))'
-TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!$L{DR},{TMATCH})<=$C$6),0))'
-# LWIR avg (col M) min/max (D6/E6)
-TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!$M{DR},{TMATCH})>=$D$6),0))'
-TF_LW2 = f'IF($E$6="",1,IFERROR(--(INDEX({TV}!$M{DR},{TMATCH})<=$E$6),0))'
-# Combined avg (col N) min/max (F6/G6)
-TF_CB1 = f'IF($F$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})>=$F$6),0))'
-TF_CB2 = f'IF($G$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})<=$G$6),0))'
+# Novel (A6) — TV col M
+TF_NOV = f'IF($A$6="הכל",1,IFERROR(--(INDEX({TV}!$M{DR},{TMATCH})=$A$6),0))'
+# MWIR avg (col N) min/max (B6/C6)
+TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})>=$B$6),0))'
+TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})<=$C$6),0))'
+# LWIR avg (col O) min/max (D6/E6)
+TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!$O{DR},{TMATCH})>=$D$6),0))'
+TF_LW2 = f'IF($E$6="",1,IFERROR(--(INDEX({TV}!$O{DR},{TMATCH})<=$E$6),0))'
+# Combined avg (col P) min/max (F6/G6)
+TF_CB1 = f'IF($F$6="",1,IFERROR(--(INDEX({TV}!$P{DR},{TMATCH})>=$F$6),0))'
+TF_CB2 = f'IF($G$6="",1,IFERROR(--(INDEX({TV}!$P{DR},{TMATCH})<=$G$6),0))'
 
 TF_ALL = (f'*({TF_NOV})*({TF_MW1})*({TF_MW2})'
           f'*({TF_LW1})*({TF_LW2})*({TF_CB1})*({TF_CB2})')
@@ -1160,14 +1162,14 @@ t_det_map = {
     "F": "N", "G": "O", "H": "U", "I": "X", "J": "AC",
 }
 
-# Tech detail columns → tech values sheet column mapping
+# Tech detail columns → tech values sheet column mapping (updated for NIR layout)
 t_tech_map = {
-    "L": "K",  # נובל
+    "L": "M",  # נובל
     "M": "F",  # MWIR A
-    "N": "I",  # MWIR B
+    "N": "J",  # MWIR B
     "O": "G",  # LWIR A
-    "P": "J",  # LWIR B
-    "Q": "N",  # ממוצע משולב
+    "P": "K",  # LWIR B
+    "Q": "P",  # ממוצע משולב
 }
 
 T_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
@@ -1281,60 +1283,59 @@ for r in range(2, 32):
 ws_di = wb["מלאי רצוי"]
 ws_di.sheet_view.rightToLeft = True
 
+DI_ROWS = 121  # 120 data rows (2–121)
+
 di_headers = [
     "שם מוצר",              # A — free text / dropdown
     "גרסה",                 # B — free text
     "סביבה/הדפס",           # C — free text (env or print name)
-    "סוג בד",               # D — free text / dropdown
-    "יעד חדר תצוגה",        # E — numeric target
-    "יעד תיק הדגמות",       # F — numeric target
-    "יעד השאלות",            # G — numeric target
-    "קיים - חדר תצוגה",     # H — COUNTIFS formula
-    "קיים - תיק",           # I — COUNTIFS formula
-    "קיים - השאלות",         # J — COUNTIFS formula
-    "חסר - חדר תצוגה",      # K — gap formula
-    "חסר - תיק",            # L — gap formula
-    "חסר - השאלות",          # M — gap formula
+    "סביבה צד שני",          # D — free text (second environment)
+    "סוג בד",               # E — free text / dropdown
+    "יעד חדר תצוגה",        # F — numeric target
+    "יעד תיק הדגמות",       # G — numeric target
+    "יעד השאלות",            # H — numeric target
+    "קיים - חדר תצוגה",     # I — COUNTIFS formula
+    "קיים - תיק",           # J — COUNTIFS formula
+    "קיים - השאלות",         # K — COUNTIFS formula
+    "חסר - חדר תצוגה",      # L — gap formula
+    "חסר - תיק",            # M — gap formula
+    "חסר - השאלות",          # N — gap formula
+    "הערות",                 # O — free text
 ]
 for i, h in enumerate(di_headers):
     cell = ws_di.cell(row=1, column=i + 1, value=h)
     style_header(cell)
 
-di_widths = {"A": 24, "B": 14, "C": 20, "D": 16, "E": 18,
-             "F": 18, "G": 16, "H": 20, "I": 16, "J": 18,
-             "K": 20, "L": 16, "M": 18}
+di_widths = {"A": 24, "B": 14, "C": 20, "D": 20, "E": 16,
+             "F": 18, "G": 18, "H": 16, "I": 20, "J": 16,
+             "K": 18, "L": 20, "M": 16, "N": 18, "O": 28}
 for col, w in di_widths.items():
     ws_di.column_dimensions[col].width = w
 
 ws_di.freeze_panes = "A2"
 
 # Target columns: integer format
-for col in ("E", "F", "G"):
-    for r in range(2, 22):
+for col in ("F", "G", "H"):
+    for r in range(2, DI_ROWS + 1):
         ws_di[f"{col}{r}"].number_format = "0"
 
-# Formulas for 20 data-entry rows (rows 2–21)
+# Formulas for 120 data-entry rows (rows 2–121)
 # COUNTIFS: count inventory items matching product + version + fabric + status
-# Hierarchical: specific filters (B, C, D) only apply when filled
-for r in range(2, 22):
+# Hierarchical: specific filters (B, E) only apply when filled
+for r in range(2, DI_ROWS + 1):
     # Base product match (mandatory)
     prod_cond = f'{DI}!$B$2:$B$500,A{r}'
 
-    # Optional version condition
-    ver_cond = f'IF(B{r}<>"",COUNTIFS({prod_cond},{DI}!$C$2:$C$500,B{r},'
-    ver_else = f'COUNTIFS({prod_cond},'
-
-    # Optional fabric condition suffix
-    fab_if = f'{DI}!$G$2:$G$500,D{r},'
-    fab_else = ''
+    # Optional fabric condition suffix (fabric is now col E)
+    fab_if = f'{DI}!$G$2:$G$500,E{r},'
 
     # Build COUNTIFS for each status
-    # Pattern: IF(D<>"", IF(B<>"", COUNTIFS(prod,ver,fab,status), COUNTIFS(prod,fab,status)),
+    # Pattern: IF(E<>"", IF(B<>"", COUNTIFS(prod,ver,fab,status), COUNTIFS(prod,fab,status)),
     #                    IF(B<>"", COUNTIFS(prod,ver,status), COUNTIFS(prod,status)))
-    for out_col, status in [("H", "בחדר תצוגה"), ("I", "בתיק הדגמה"), ("J", "מושאל")]:
+    for out_col, status in [("I", "בחדר תצוגה"), ("J", "בתיק הדגמה"), ("K", "מושאל")]:
         stat_cond = f'{DI}!$X$2:$X$500,"{status}"'
         ws_di[f"{out_col}{r}"] = (
-            f'=IF(A{r}="","",IF(D{r}<>"",'
+            f'=IF(A{r}="","",IF(E{r}<>"",'
             f'IF(B{r}<>"",COUNTIFS({prod_cond},{DI}!$C$2:$C$500,B{r},{fab_if}{stat_cond}),'
             f'COUNTIFS({prod_cond},{fab_if}{stat_cond})),'
             f'IF(B{r}<>"",COUNTIFS({prod_cond},{DI}!$C$2:$C$500,B{r},{stat_cond}),'
@@ -1342,21 +1343,21 @@ for r in range(2, 22):
         )
 
     # Gap formulas: target - actual, minimum 0
-    for target_col, actual_col, gap_col in [("E", "H", "K"), ("F", "I", "L"), ("G", "J", "M")]:
+    for target_col, actual_col, gap_col in [("F", "I", "L"), ("G", "J", "M"), ("H", "K", "N")]:
         ws_di[f"{gap_col}{r}"] = (
             f'=IF(OR({target_col}{r}="",A{r}=""),"",MAX(0,{target_col}{r}-{actual_col}{r}))'
         )
 
     # Style all cells
-    for c in range(1, 14):
+    for c in range(1, 16):
         style_data(ws_di.cell(row=r, column=c), r - 2)
 
 # Conditional formatting: red fill when gap > 0
 GAP_RED = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 GAP_RED_FONT = Font(name="Calibri", bold=True, color="9C0006")
-for gap_col in ("K", "L", "M"):
+for gap_col in ("L", "M", "N"):
     ws_di.conditional_formatting.add(
-        f"{gap_col}2:{gap_col}21",
+        f"{gap_col}2:{gap_col}{DI_ROWS}",
         FormulaRule(
             formula=[f'{gap_col}2>0'],
             font=GAP_RED_FONT,
@@ -1432,8 +1433,8 @@ ws_l.protection.sheet = True
 ws_l.protection.password = "1998"
 ws_l.protection.enable()
 
-# --- Tech Values (ws_tv) — unlock input columns A, F, G, I, J, K ---
-tv_input_cols = [1, 6, 7, 9, 10, 11]  # A, F, G, I, J, K
+# --- Tech Values (ws_tv) — unlock input columns A, F, G, H, J, K, L, M ---
+tv_input_cols = [1, 6, 7, 8, 10, 11, 12, 13]  # A, F, G, H, J, K, L, M
 for r in range(2, 501):
     for c in tv_input_cols:
         ws_tv.cell(row=r, column=c).protection = UNLOCKED
@@ -1449,9 +1450,9 @@ ws_c.protection.sheet = True
 ws_c.protection.password = "1998"
 ws_c.protection.enable()
 
-# --- Desired Inventory (ws_di) — unlock input cols A-G, lock H-M ---
-for r in range(2, 22):
-    for c in range(1, 8):  # A-G
+# --- Desired Inventory (ws_di) — unlock input cols A-H + O, lock I-N ---
+for r in range(2, DI_ROWS + 1):
+    for c in list(range(1, 9)) + [15]:  # A-H, O
         ws_di.cell(row=r, column=c).protection = UNLOCKED
 ws_di.protection.sheet = True
 ws_di.protection.password = "1998"

@@ -17,6 +17,7 @@ sheet_names = [
     "ערכים טכנולוגיים",
     "הגדרות",
     "מלאי רצוי",
+    "רצוי מול מצוי",
 ]
 
 wb.active.title = sheet_names[0]
@@ -1457,6 +1458,173 @@ for r in range(2, DI_ROWS + 1):
 ws_di.protection.sheet = True
 ws_di.protection.password = "1998"
 ws_di.protection.enable()
+
+
+# ===========================================================================
+# Build רצוי מול מצוי (Desired vs Actual) sheet
+# ===========================================================================
+ws_cmp = wb["רצוי מול מצוי"]
+ws_cmp.sheet_view.rightToLeft = True
+
+# --- Filter area (rows 1-2) ---
+cmp_filter_labels = ["סביבה", "קו מוצר", "סוג בד"]
+for i, label in enumerate(cmp_filter_labels):
+    cell = ws_cmp.cell(row=1, column=i + 1, value=label)
+    cell.font = HEADER_FONT
+    cell.fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_cmp.cell(row=2, column=i + 1, value="הכל")
+    val.fill = ROW_EVEN_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Filter dropdowns
+dv = DataValidation(type="list",
+    formula1='"הכל,מדברי,מיוער,שלג,ימי,מבולדר/שטח בנוי,אחר"',
+    allow_blank=True)
+dv.sqref = "A2"
+ws_cmp.add_data_validation(dv)
+dv = DataValidation(type="list",
+    formula1='"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,Blankets,Urban,Platform On-The-Move,Accessories"',
+    allow_blank=True)
+dv.sqref = "B2"
+ws_cmp.add_data_validation(dv)
+
+# --- Title row 3 ---
+ws_cmp["A3"] = "סיכום רצוי מול מצוי"
+ws_cmp["A3"].font = Font(name="Calibri", bold=True, size=14, color="1F3864")
+
+# --- Headers (row 4) ---
+DI_SH = "'מלאי רצוי'"
+cmp_headers = [
+    "שם מוצר",           # A — from desired inventory
+    "סביבה",             # B — env side 1
+    "סביבה צד שני",       # C — env side 2
+    "סוג בד",            # D — fabric
+    "יעד תצוגה",          # E — target showroom
+    "יעד תיק",           # F — target demo
+    "יעד השאלות",         # G — target loans
+    "מצוי תצוגה",         # H — actual showroom (COUNTIFS)
+    "מצוי תיק",          # I — actual demo
+    "מצוי השאלות",        # J — actual loans
+    "מצוי סה\"כ",         # K — total actual
+    "פער תצוגה",          # L — gap showroom
+    "פער תיק",           # M — gap demo
+    "פער השאלות",         # N — gap loans
+    "הערות",             # O — notes from desired
+]
+for i, h in enumerate(cmp_headers):
+    cell = ws_cmp.cell(row=4, column=i + 1, value=h)
+    style_header(cell)
+
+# Column widths
+cmp_widths = {"A": 28, "B": 16, "C": 16, "D": 18, "E": 14, "F": 14,
+              "G": 14, "H": 14, "I": 14, "J": 14, "K": 14, "L": 14,
+              "M": 14, "N": 14, "O": 28}
+for col, w in cmp_widths.items():
+    ws_cmp.column_dimensions[col].width = w
+
+ws_cmp.freeze_panes = "A5"
+
+# --- Formulas (rows 5-124, pulling from מלאי רצוי rows 2-121) ---
+CMP_ROWS = 120
+for r in range(5, 5 + CMP_ROWS):
+    di_r = r - 3  # desired inventory row (5->2, 6->3, etc.)
+
+    # A-D, O: pull from desired inventory
+    ws_cmp[f"A{r}"] = f'=IF({DI_SH}!A{di_r}="","",{DI_SH}!A{di_r})'
+    ws_cmp[f"B{r}"] = f'=IF($A{r}="","",{DI_SH}!C{di_r})'
+    ws_cmp[f"C{r}"] = f'=IF($A{r}="","",{DI_SH}!D{di_r})'
+    ws_cmp[f"D{r}"] = f'=IF($A{r}="","",{DI_SH}!E{di_r})'
+    ws_cmp[f"E{r}"] = f'=IF($A{r}="","",{DI_SH}!F{di_r})'
+    ws_cmp[f"F{r}"] = f'=IF($A{r}="","",{DI_SH}!G{di_r})'
+    ws_cmp[f"G{r}"] = f'=IF($A{r}="","",{DI_SH}!H{di_r})'
+    ws_cmp[f"O{r}"] = f'=IF($A{r}="","",{DI_SH}!O{di_r})'
+
+    # H-J: actual counts from inventory (COUNTIFS matching product name + status)
+    # Use the same hierarchical logic as desired inventory
+    prod_cond = f'{DI}!$B$2:$B$500,$A{r}'
+    fab_if = f'{DI}!$G$2:$G$500,$D{r},'
+
+    for out_col, status in [("H", "בחדר תצוגה"), ("I", "בתיק הדגמה"), ("J", "מושאל")]:
+        stat_cond = f'{DI}!$X$2:$X$500,"{status}"'
+        ws_cmp[f"{out_col}{r}"] = (
+            f'=IF($A{r}="","",IF($D{r}<>"",'
+            f'COUNTIFS({prod_cond},{fab_if}{stat_cond}),'
+            f'COUNTIFS({prod_cond},{stat_cond})))'
+        )
+
+    # K: total actual (all statuses)
+    ws_cmp[f"K{r}"] = (
+        f'=IF($A{r}="","",IF($D{r}<>"",'
+        f'COUNTIFS({prod_cond},{fab_if}{DI}!$D$2:$D$500,"<>"),'
+        f'COUNTIFS({prod_cond},{DI}!$D$2:$D$500,"<>")))'
+    )
+
+    # L-N: gaps (target - actual, min 0)
+    for tgt, act, gap in [("E", "H", "L"), ("F", "I", "M"), ("G", "J", "N")]:
+        ws_cmp[f"{gap}{r}"] = (
+            f'=IF(OR($A{r}="",$E{r}=""),"",MAX(0,{tgt}{r}-{act}{r}))'
+        )
+
+    # Style
+    for c in range(1, 16):
+        style_data(ws_cmp.cell(row=r, column=c), r - 5)
+
+# Number format for target/actual/gap columns
+for col in ("E", "F", "G", "H", "I", "J", "K", "L", "M", "N"):
+    for r in range(5, 5 + CMP_ROWS):
+        ws_cmp[f"{col}{r}"].number_format = "0"
+
+# Conditional formatting: red when gap > 0
+for gap_col in ("L", "M", "N"):
+    ws_cmp.conditional_formatting.add(
+        f"{gap_col}5:{gap_col}{4 + CMP_ROWS}",
+        FormulaRule(
+            formula=[f'{gap_col}5>0'],
+            font=Font(name="Calibri", bold=True, color="9C0006"),
+            fill=PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
+        ),
+    )
+
+# Green when gap = 0 and target > 0 (fully met)
+for gap_col, tgt_col in [("L", "E"), ("M", "F"), ("N", "G")]:
+    ws_cmp.conditional_formatting.add(
+        f"{gap_col}5:{gap_col}{4 + CMP_ROWS}",
+        FormulaRule(
+            formula=[f'AND({gap_col}5=0,{tgt_col}5>0)'],
+            font=Font(name="Calibri", bold=True, color="006100"),
+            fill=PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"),
+        ),
+    )
+
+# --- Summary section at top (merged into D1-O1 area) ---
+# Use SUMPRODUCT for overall totals in row 3
+ws_cmp["E3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*E5:E{4+CMP_ROWS})'
+ws_cmp["F3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*F5:F{4+CMP_ROWS})'
+ws_cmp["G3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*G5:G{4+CMP_ROWS})'
+ws_cmp["L3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*L5:L{4+CMP_ROWS})'
+ws_cmp["M3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*M5:M{4+CMP_ROWS})'
+ws_cmp["N3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*N5:N{4+CMP_ROWS})'
+for col in ("E", "F", "G", "L", "M", "N"):
+    c = ws_cmp[f"{col}3"]
+    c.font = Font(name="Calibri", bold=True, size=12, color="1F3864")
+    c.number_format = "0"
+
+# Labels for summary
+ws_cmp["D3"] = "סה\"כ:"
+ws_cmp["D3"].font = Font(name="Calibri", bold=True, size=12, color="1F3864")
+ws_cmp["K3"] = "סה\"כ פערים:"
+ws_cmp["K3"].font = Font(name="Calibri", bold=True, size=12, color="1F3864")
+
+# --- Protection ---
+# Unlock only filter cells
+for ref in ["A2", "B2", "C2"]:
+    ws_cmp[ref].protection = UNLOCKED
+ws_cmp.protection.sheet = True
+ws_cmp.protection.password = "1998"
+ws_cmp.protection.enable()
 
 
 # ===========================================================================

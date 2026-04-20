@@ -96,6 +96,14 @@ def add_named(name, ref):
     wb.defined_names.add(DefinedName(name, attr_text=ref))
 
 
+MR = 500  # max data row for formulas
+
+
+def R(col):
+    """Absolute column range for inventory/tech formulas: $COL$2:$COL$MR."""
+    return f"${col}$2:${col}${MR}"
+
+
 # ===========================================================================
 # Build הגדרות (Settings) sheet
 # ===========================================================================
@@ -330,7 +338,6 @@ for c in range(31, 36):
     ws.column_dimensions[get_column_letter(c)].hidden = True
 
 # --- Data Validations (rows 2–500) ---
-MR = 500
 
 # A: Product Line
 dv = DataValidation(type="list", formula1="קווי_מוצר", allow_blank=True)
@@ -670,16 +677,15 @@ for col, w in {"A": 48, "B": 22, "C": 20, "D": 18, "E": 18,
 # ---------------------------------------------------------------------------
 # Reusable formula building blocks
 DI = "מלאי"                 # inventory sheet name
-DR = "$2:$500"              # data row range
 
 
 def dflt(dash_cell, inv_col):
     """Dashboard filter term: pass all when 'הכל', else exact match."""
-    return f'(IF({dash_cell}="הכל",1,{DI}!${inv_col}{DR}={dash_cell}))'
+    return f'(IF({dash_cell}="הכל",1,{DI}!{R(inv_col)}={dash_cell}))'
 
 
-F_DATA = f'({DI}!$D{DR}<>"")'
-F_ENV  = f'(--{DI}!$AE{DR})'
+F_DATA = f'({DI}!{R("D")}<>"")'
+F_ENV  = f'(--{DI}!{R("AE")})'
 
 # Build full base‐filter string  (data × env × 10 user filters)
 BF = (f'{F_DATA}*{F_ENV}'
@@ -704,27 +710,27 @@ metrics = [
     (6,  'סה"כ פריטים תואמים',
      f'=SUMPRODUCT({BF})'),
     (7,  "כמות תקין לגמרי",
-     f'=SUMPRODUCT({BF}*(--{DI}!$AF{DR}))'),
+     f'=SUMPRODUCT({BF}*(--{DI}!{R("AF")}))'),
     (8,  "כמות תקין ויזואלית בלבד",
-     f'=SUMPRODUCT({BF}*(--{DI}!$AG{DR}))'),
+     f'=SUMPRODUCT({BF}*(--{DI}!{R("AG")}))'),
     (9,  "כמות תקין תרמית בלבד",
-     f'=SUMPRODUCT({BF}*(--{DI}!$AH{DR}))'),
+     f'=SUMPRODUCT({BF}*(--{DI}!{R("AH")}))'),
     (10, "כמות במלאי",
-     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="במלאי"))'),
+     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="במלאי"))'),
     (11, "כמות מושאלים",
-     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="מושאל"))'),
+     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="מושאל"))'),
     (12, "כמות בחדר תצוגה",
-     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="בחדר תצוגה"))'),
+     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="בחדר תצוגה"))'),
     (13, "כמות בתיק הדגמה",
-     f'=SUMPRODUCT({BF}*({DI}!$X{DR}="בתיק הדגמה"))'),
+     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="בתיק הדגמה"))'),
     (14, "כמות עם פער בתכולה",
-     f'=SUMPRODUCT({BF}*({DI}!$AD{DR}="כן"))'),
+     f'=SUMPRODUCT({BF}*({DI}!{R("AD")}="כן"))'),
     (15, "כמות גרסה מיוחדת - פיתוח",
-     f'=SUMPRODUCT({BF}*({DI}!$J{DR}="כן"))'),
+     f'=SUMPRODUCT({BF}*({DI}!{R("J")}="כן"))'),
     (16, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
      f'=IF($A$2="הכל","—",'
-     f'SUMPRODUCT({BF_NE}*({DI}!$AE{DR}=FALSE)'
-     f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))'),
+     f'SUMPRODUCT({BF_NE}*({DI}!{R("AE")}=FALSE)'
+     f'*(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))'),
 ]
 
 for row, label, formula in metrics:
@@ -752,8 +758,8 @@ ws_d["A17"].border = THIN_BORDER
 ws_d.merge_cells("D17:J17")
 ws_d["D17"] = (
     f'=IF($A$2="הכל","—",IFERROR(TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
-    f'{DI}!$M{DR},({DI}!$D{DR}<>"")*({DI}!$AE{DR}=FALSE)'
-    f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))),""))'
+    f'{DI}!{R("M")},({DI}!{R("D")}<>"")*({DI}!{R("AE")}=FALSE)'
+    f'*(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))),""))'
 )
 ws_d["D17"].font = Font(name="Calibri", size=10, color="1F3864")
 ws_d["D17"].alignment = CELL_ALIGN
@@ -801,7 +807,7 @@ for r in range(21, 321):
     # A–J: pull data via INDEX
     for dcol, icol in det_map.items():
         ws_d[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+            f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
         )
 
     # Style all cells in the row
@@ -816,8 +822,20 @@ LOAN_H = 323        # header row
 LOAN_S = 324        # first data row
 LOAN_E = 423        # last data row
 
+# Visual separator before loans section
+LOAN_SEP_FILL = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
+for c in range(1, 11):
+    cell = ws_d.cell(row=LOAN_T - 1, column=c)
+    cell.fill = LOAN_SEP_FILL
+    cell.border = THIN_BORDER
+
 ws_d[f"A{LOAN_T}"] = "השאלות פעילות"
-ws_d[f"A{LOAN_T}"].font = TITLE_FONT_D
+ws_d[f"A{LOAN_T}"].font = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
+ws_d[f"A{LOAN_T}"].fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+for c in range(1, 11):
+    ws_d.cell(row=LOAN_T, column=c).fill = PatternFill(
+        start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    ws_d.cell(row=LOAN_T, column=c).border = THIN_BORDER
 
 loan_d_headers = ["מזהה", "מוצר", "גרסה", "מושאל ל", "מדינה", "החזרה משוערת", "באיחור"]
 for i, h in enumerate(loan_d_headers):
@@ -828,7 +846,7 @@ for i, h in enumerate(loan_d_headers):
 style_header(ws_d.cell(row=LOAN_H, column=11, value="loan_ref"))
 
 # Loan filter: status = מושאל (always, no dashboard filter)
-LOAN_COND = f'({DI}!$D{DR}<>"")*({DI}!$X{DR}="מושאל")'
+LOAN_COND = f'({DI}!{R("D")}<>"")*({DI}!{R("X")}="מושאל")'
 
 loan_d_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 
@@ -841,14 +859,14 @@ for r in range(LOAN_S, LOAN_E + 1):
     # A–F: pull data
     for dcol, icol in loan_d_map.items():
         ws_d[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+            f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
         )
 
     # G: overdue indicator
     ws_d[f"G{r}"] = (
         f'=IF($K{r}="","",IF(AND('
-        f'INDEX({DI}!$AB{DR},$K{r})<>"",'
-        f'INDEX({DI}!$AB{DR},$K{r})<TODAY()),'
+        f'INDEX({DI}!{R("AB")},$K{r})<>"",'
+        f'INDEX({DI}!{R("AB")},$K{r})<TODAY()),'
         f'"באיחור!","תקין"))'
     )
 
@@ -1018,8 +1036,8 @@ TV = "'ערכים טכנולוגיים'"  # sheet name (quoted for formulas)
 
 # Inline env match (not dependent on regular dashboard AE helper)
 T_ENV = (f'IF($A$2="הכל",1,'
-         f'({DI}!$Q{DR}=$A$2)+({DI}!$R{DR}=$A$2)+'
-         f'({DI}!$S{DR}=$A$2)+({DI}!$T{DR}=$A$2)>0)')
+         f'({DI}!{R("Q")}=$A$2)+({DI}!{R("R")}=$A$2)+'
+         f'({DI}!{R("S")}=$A$2)+({DI}!{R("T")}=$A$2)>0)')
 
 # Base filter with inline env (identical logic to regular, self-contained)
 BF_T = (f'{F_DATA}*({T_ENV})'
@@ -1029,20 +1047,16 @@ BF_T = (f'{F_DATA}*({T_ENV})'
         f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
 
 # MATCH expression: find inventory item in tech values sheet
-TMATCH = f'MATCH({DI}!$D{DR},{TV}!$A{DR},0)'
+TMATCH = f'MATCH({DI}!{R("D")},{TV}!{R("A")},0)'
 
 # Tech filter conditions (appended to BF_T)
-# Novel (A6) — TV col M
-TF_NOV = f'IF($A$6="הכל",1,IFERROR(--(INDEX({TV}!$M{DR},{TMATCH})=$A$6),0))'
-# MWIR avg (col N) min/max (B6/C6)
-TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})>=$B$6),0))'
-TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!$N{DR},{TMATCH})<=$C$6),0))'
-# LWIR avg (col O) min/max (D6/E6)
-TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!$O{DR},{TMATCH})>=$D$6),0))'
-TF_LW2 = f'IF($E$6="",1,IFERROR(--(INDEX({TV}!$O{DR},{TMATCH})<=$E$6),0))'
-# Combined avg (col P) min/max (F6/G6)
-TF_CB1 = f'IF($F$6="",1,IFERROR(--(INDEX({TV}!$P{DR},{TMATCH})>=$F$6),0))'
-TF_CB2 = f'IF($G$6="",1,IFERROR(--(INDEX({TV}!$P{DR},{TMATCH})<=$G$6),0))'
+TF_NOV = f'IF($A$6="הכל",1,IFERROR(--(INDEX({TV}!{R("M")},{TMATCH})=$A$6),0))'
+TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!{R("N")},{TMATCH})>=$B$6),0))'
+TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!{R("N")},{TMATCH})<=$C$6),0))'
+TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!{R("O")},{TMATCH})>=$D$6),0))'
+TF_LW2 = f'IF($E$6="",1,IFERROR(--(INDEX({TV}!{R("O")},{TMATCH})<=$E$6),0))'
+TF_CB1 = f'IF($F$6="",1,IFERROR(--(INDEX({TV}!{R("P")},{TMATCH})>=$F$6),0))'
+TF_CB2 = f'IF($G$6="",1,IFERROR(--(INDEX({TV}!{R("P")},{TMATCH})<=$G$6),0))'
 
 TF_ALL = (f'*({TF_NOV})*({TF_MW1})*({TF_MW2})'
           f'*({TF_LW1})*({TF_LW2})*({TF_CB1})*({TF_CB2})')
@@ -1050,10 +1064,10 @@ TF_ALL = (f'*({TF_NOV})*({TF_MW1})*({TF_MW2})'
 BF_TECH = BF_T + TF_ALL  # full techops filter
 
 # Inline quality conditions (not dependent on regular dashboard helpers)
-FULLY_OK_T = (f'(({DI}!$O{DR}="כן")*({DI}!$U{DR}="כן")'
-              f'+({DI}!$P{DR}="כן")*({DI}!$V{DR}="כן")>0)')
-ANY_VIS_T = f'(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)'
-ANY_THERM_T = f'(({DI}!$U{DR}="כן")+({DI}!$V{DR}="כן")>0)'
+FULLY_OK_T = (f'(({DI}!{R("O")}="כן")*({DI}!{R("U")}="כן")'
+              f'+({DI}!{R("P")}="כן")*({DI}!{R("V")}="כן")>0)')
+ANY_VIS_T = f'(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)'
+ANY_THERM_T = f'(({DI}!{R("U")}="כן")+({DI}!{R("V")}="כן")>0)'
 
 # BF_TECH without env for wrong-print metric
 BF_TECH_NE = (f'{F_DATA}'
@@ -1065,8 +1079,8 @@ BF_TECH_NE = (f'{F_DATA}'
 
 # Inline env FALSE for wrong-print
 T_ENV_FALSE = (f'IF($A$2="הכל",FALSE,'
-               f'({DI}!$Q{DR}<>$A$2)*({DI}!$R{DR}<>$A$2)*'
-               f'({DI}!$S{DR}<>$A$2)*({DI}!$T{DR}<>$A$2))')
+               f'({DI}!{R("Q")}<>$A$2)*({DI}!{R("R")}<>$A$2)*'
+               f'({DI}!{R("S")}<>$A$2)*({DI}!{R("T")}<>$A$2))')
 
 # ---------------------------------------------------------------------------
 # Summary Area (rows 8–20)
@@ -1084,17 +1098,17 @@ t_metrics = [
     (11, "כמות תקין תרמית בלבד",
      f'=SUMPRODUCT({BF_TECH}*{ANY_THERM_T}*(1-{ANY_VIS_T}))'),
     (12, "כמות במלאי",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="במלאי"))'),
+     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="במלאי"))'),
     (13, "כמות מושאלים",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="מושאל"))'),
+     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="מושאל"))'),
     (14, "כמות בחדר תצוגה",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="בחדר תצוגה"))'),
+     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="בחדר תצוגה"))'),
     (15, "כמות בתיק הדגמה",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!$X{DR}="בתיק הדגמה"))'),
+     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="בתיק הדגמה"))'),
     (16, "כמות עם פער בתכולה",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!$AD{DR}="כן"))'),
+     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("AD")}="כן"))'),
     (17, "כמות גרסה מיוחדת - פיתוח",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!$J{DR}="כן"))'),
+     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("J")}="כן"))'),
     (18, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
      f'=IF($A$2="הכל","—",'
      f'SUMPRODUCT({BF_TECH_NE}*({T_ENV_FALSE})*{ANY_VIS_T}))'),
@@ -1125,8 +1139,8 @@ ws_t["A19"].border = THIN_BORDER
 ws_t.merge_cells("D19:J19")
 ws_t["D19"] = (
     f'=IF($A$2="הכל","—",IFERROR(TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
-    f'{DI}!$M{DR},({DI}!$D{DR}<>"")*({T_ENV_FALSE})'
-    f'*(({DI}!$O{DR}="כן")+({DI}!$P{DR}="כן")>0)))),""))'
+    f'{DI}!{R("M")},({DI}!{R("D")}<>"")*({T_ENV_FALSE})'
+    f'*(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))),""))'
 )
 ws_t["D19"].font = Font(name="Calibri", size=10, color="1F3864")
 ws_t["D19"].alignment = CELL_ALIGN
@@ -1184,14 +1198,14 @@ for r in range(23, 323):
     # A–J: pull data from inventory
     for dcol, icol in t_det_map.items():
         ws_t[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+            f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
         )
 
     # L–Q: pull tech values via INDEX/MATCH on item ID (A column = ID)
     for dcol, tcol in t_tech_map.items():
         ws_t[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",IFERROR(INDEX({TV}!${tcol}{DR},'
-            f'MATCH(A{r},{TV}!$A{DR},0)),""))'
+            f'=IF($K{r}="","",IFERROR(INDEX({TV}!{R(tcol)},'
+            f'MATCH(A{r},{TV}!{R("A")},0)),""))'
         )
 
     # Style all cells
@@ -1215,7 +1229,7 @@ for i, h in enumerate(t_loan_headers):
     style_header(cell)
 style_header(ws_t.cell(row=T_LN_H, column=11, value="loan_ref"))
 
-T_LOAN_COND = f'({DI}!$D{DR}<>"")*({DI}!$X{DR}="מושאל")'
+T_LOAN_COND = f'({DI}!{R("D")}<>"")*({DI}!{R("X")}="מושאל")'
 t_loan_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 
 for r in range(T_LN_S, T_LN_E + 1):
@@ -1223,12 +1237,12 @@ for r in range(T_LN_S, T_LN_E + 1):
     ws_t[f"K{r}"] = f'=IFERROR(SMALL(IF({T_LOAN_COND},{T_ROW_IDX},""),{n}),"")'
     for dcol, icol in t_loan_map.items():
         ws_t[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",INDEX({DI}!${icol}{DR},$K{r}))'
+            f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
         )
     ws_t[f"G{r}"] = (
         f'=IF($K{r}="","",IF(AND('
-        f'INDEX({DI}!$AB{DR},$K{r})<>"",'
-        f'INDEX({DI}!$AB{DR},$K{r})<TODAY()),'
+        f'INDEX({DI}!{R("AB")},$K{r})<>"",'
+        f'INDEX({DI}!{R("AB")},$K{r})<TODAY()),'
         f'"באיחור!","תקין"))'
     )
     ws_t[f"F{r}"].number_format = "DD/MM/YYYY"
@@ -1461,23 +1475,58 @@ ws_di.protection.enable()
 
 
 # ===========================================================================
-# Build רצוי מול מצוי (Desired vs Actual) sheet
+# Build רצוי מול מצוי (Desired vs Actual) sheet — interactive filtered view
 # ===========================================================================
 ws_cmp = wb["רצוי מול מצוי"]
 ws_cmp.sheet_view.rightToLeft = True
 
-# --- Filter area (rows 1-2) ---
+DI_SH = "'מלאי רצוי'"
+ST_SH = "'הגדרות'"
+CMP_DISPLAY = 120  # display row slots
+
+# --- DI source ranges (rows 2-121 = 120 data rows) ---
+DI_END = DI_ROWS  # 121
+DI_A_R = f"{DI_SH}!$A$2:$A${DI_END}"
+DI_B_R = f"{DI_SH}!$B$2:$B${DI_END}"
+DI_C_R = f"{DI_SH}!$C$2:$C${DI_END}"
+DI_D_R = f"{DI_SH}!$D$2:$D${DI_END}"
+DI_E_R = f"{DI_SH}!$E$2:$E${DI_END}"
+DI_F_R = f"{DI_SH}!$F$2:$F${DI_END}"
+DI_G_R = f"{DI_SH}!$G$2:$G${DI_END}"
+DI_H_R = f"{DI_SH}!$H$2:$H${DI_END}"
+DI_O_R = f"{DI_SH}!$O$2:$O${DI_END}"
+
+# Product line lookup array (maps each DI product name → product line)
+PL_A = f"{ST_SH}!$A${prod_start}:$A${prod_end}"
+PL_B = f"{ST_SH}!$B${prod_start}:$B${prod_end}"
+
+# --- Filter condition (evaluated over all 120 DI rows) ---
+CMP_HAS_DATA = f'({DI_A_R}<>"")'
+CMP_F_ENV  = f'(IF($A$2="הכל",1,{DI_C_R}=$A$2))'
+CMP_F_PL   = f'(IF($B$2="הכל",1,IFERROR(--(INDEX({PL_A},MATCH({DI_A_R},{PL_B},0))=$B$2),0)))'
+CMP_F_FAB  = f'(IF($C$2="הכל",1,{DI_E_R}=$C$2))'
+CMP_BF = f'{CMP_HAS_DATA}*{CMP_F_ENV}*{CMP_F_PL}*{CMP_F_FAB}'
+CMP_ROW_IDX = f"ROW({DI_A_R})-ROW({DI_SH}!$A$2)+1"
+
+# --- Filter area (rows 1-2) — styled filter bar ---
 cmp_filter_labels = ["סביבה", "קו מוצר", "סוג בד"]
 for i, label in enumerate(cmp_filter_labels):
     cell = ws_cmp.cell(row=1, column=i + 1, value=label)
-    cell.font = HEADER_FONT
-    cell.fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    cell.font = FILTER_FONT
+    cell.fill = FILTER_BG
     cell.alignment = HEADER_ALIGN
     cell.border = THIN_BORDER
     val = ws_cmp.cell(row=2, column=i + 1, value="הכל")
-    val.fill = ROW_EVEN_FILL
+    val.fill = FILTER_VAL_FILL
     val.alignment = CELL_ALIGN
     val.border = THIN_BORDER
+    val.protection = UNLOCKED
+
+# Title in the filter row area
+ws_cmp.merge_cells("E1:J1")
+ws_cmp["E1"] = "ריכוז רצוי מול מצוי"
+ws_cmp["E1"].font = Font(name="Calibri", bold=True, size=16, color="1F3864")
+ws_cmp["E1"].alignment = Alignment(horizontal="center", vertical="center")
 
 # Filter dropdowns
 dv = DataValidation(type="list",
@@ -1486,67 +1535,123 @@ dv = DataValidation(type="list",
 dv.sqref = "A2"
 ws_cmp.add_data_validation(dv)
 dv = DataValidation(type="list",
-    formula1='"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,Blankets,Urban,Platform On-The-Move,Accessories"',
+    formula1='"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,'
+             'Blankets,Urban,Platform On-The-Move,Accessories"',
     allow_blank=True)
 dv.sqref = "B2"
 ws_cmp.add_data_validation(dv)
+dv = DataValidation(type="list",
+    formula1='"הכל,Sahar,Inbar,SRV,Gabardine,Meron,Arber,IRR,'
+             'Polar,Nylon,Mesh,PVC,Other,RIPSTOP,RIPSTOP Double Layer,'
+             'Beti,MRG,3D,WaterProof Blackout Fabric,רשת רכב,'
+             'Stretch,Durable,SMT,LOKI Material,אחר"',
+    allow_blank=True)
+dv.sqref = "C2"
+ws_cmp.add_data_validation(dv)
 
-# --- Title row 3 ---
-ws_cmp["A3"] = "סיכום רצוי מול מצוי"
-ws_cmp["A3"].font = Font(name="Calibri", bold=True, size=14, color="1F3864")
+# --- Summary bar (row 3) — key metrics that respond to filters ---
+CMP_SUM_FONT = Font(name="Calibri", bold=True, size=12, color="FFFFFF")
+CMP_SUM_VAL_FONT = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
+CMP_SUM_FILL = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+CMP_CARD_FILL_G = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+CMP_CARD_FILL_R = PatternFill(start_color="C00000", end_color="C00000", fill_type="solid")
 
-# --- Headers (row 4) ---
-DI_SH = "'מלאי רצוי'"
+# Apply summary fill across row 3
+for c in range(1, 16):
+    ws_cmp.cell(row=3, column=c).fill = CMP_SUM_FILL
+    ws_cmp.cell(row=3, column=c).border = THIN_BORDER
+
+# Summary metrics
+ws_cmp["A3"] = "שורות:"
+ws_cmp["A3"].font = CMP_SUM_FONT
+ws_cmp["B3"] = f'=SUMPRODUCT({CMP_BF})'
+ws_cmp["B3"].font = CMP_SUM_VAL_FONT
+ws_cmp["B3"].number_format = "0"
+
+ws_cmp["D3"] = 'סה"כ יעדים:'
+ws_cmp["D3"].font = CMP_SUM_FONT
+ws_cmp["E3"] = (f'=SUMPRODUCT({CMP_BF}*{DI_F_R})'
+                f'+SUMPRODUCT({CMP_BF}*{DI_G_R})'
+                f'+SUMPRODUCT({CMP_BF}*{DI_H_R})')
+ws_cmp["E3"].font = CMP_SUM_VAL_FONT
+ws_cmp["E3"].number_format = "0"
+
+ws_cmp["G3"] = 'סה"כ פערים:'
+ws_cmp["G3"].font = Font(name="Calibri", bold=True, size=12, color="FFFFFF")
+ws_cmp["H3"] = f'=SUMPRODUCT((A6:A{5+CMP_DISPLAY}<>"")*L6:L{5+CMP_DISPLAY})' \
+               f'+SUMPRODUCT((A6:A{5+CMP_DISPLAY}<>"")*M6:M{5+CMP_DISPLAY})' \
+               f'+SUMPRODUCT((A6:A{5+CMP_DISPLAY}<>"")*N6:N{5+CMP_DISPLAY})'
+ws_cmp["H3"].font = CMP_SUM_VAL_FONT
+ws_cmp["H3"].number_format = "0"
+ws_cmp["G3"].fill = CMP_CARD_FILL_R
+ws_cmp["H3"].fill = CMP_CARD_FILL_R
+
+ws_cmp["J3"] = "% מילוי:"
+ws_cmp["J3"].font = CMP_SUM_FONT
+ws_cmp["K3"] = f'=IF(E3=0,"—",TEXT(1-H3/E3,"0%"))'
+ws_cmp["K3"].font = CMP_SUM_VAL_FONT
+
+# --- Row 4: separator ---
+for c in range(1, 16):
+    ws_cmp.cell(row=4, column=c).border = THIN_BORDER
+
+# --- Headers (row 5) ---
 cmp_headers = [
-    "שם מוצר",           # A — from desired inventory
-    "סביבה",             # B — env side 1
-    "סביבה צד שני",       # C — env side 2
-    "סוג בד",            # D — fabric
-    "יעד תצוגה",          # E — target showroom
-    "יעד תיק",           # F — target demo
-    "יעד השאלות",         # G — target loans
-    "מצוי תצוגה",         # H — actual showroom (COUNTIFS)
-    "מצוי תיק",          # I — actual demo
-    "מצוי השאלות",        # J — actual loans
-    "מצוי סה\"כ",         # K — total actual
-    "פער תצוגה",          # L — gap showroom
-    "פער תיק",           # M — gap demo
-    "פער השאלות",         # N — gap loans
-    "הערות",             # O — notes from desired
+    "שם מוצר",           # A
+    "סביבה",             # B
+    "סביבה צד שני",       # C
+    "סוג בד",            # D
+    "יעד תצוגה",          # E
+    "יעד תיק",           # F
+    "יעד השאלות",         # G
+    "מצוי תצוגה",         # H
+    "מצוי תיק",          # I
+    "מצוי השאלות",        # J
+    'מצוי סה"כ',          # K
+    "פער תצוגה",          # L
+    "פער תיק",           # M
+    "פער השאלות",         # N
+    "הערות",             # O
 ]
 for i, h in enumerate(cmp_headers):
-    cell = ws_cmp.cell(row=4, column=i + 1, value=h)
+    cell = ws_cmp.cell(row=5, column=i + 1, value=h)
     style_header(cell)
+
+# Hidden helper column P
+style_header(ws_cmp.cell(row=5, column=16, value="row_ref"))
+ws_cmp.column_dimensions["P"].hidden = True
 
 # Column widths
 cmp_widths = {"A": 28, "B": 16, "C": 16, "D": 18, "E": 14, "F": 14,
               "G": 14, "H": 14, "I": 14, "J": 14, "K": 14, "L": 14,
-              "M": 14, "N": 14, "O": 28}
+              "M": 14, "N": 14, "O": 28, "P": 10}
 for col, w in cmp_widths.items():
     ws_cmp.column_dimensions[col].width = w
 
-ws_cmp.freeze_panes = "A5"
+ws_cmp.freeze_panes = "A6"
 
-# --- Formulas (rows 5-124, pulling from מלאי רצוי rows 2-121) ---
-CMP_ROWS = 120
-for r in range(5, 5 + CMP_ROWS):
-    di_r = r - 3  # desired inventory row (5->2, 6->3, etc.)
+# --- Filtered data rows (6-125) using SMALL/IF ---
+for r in range(6, 6 + CMP_DISPLAY):
+    n = r - 5  # nth match
 
-    # A-D, O: pull from desired inventory
-    ws_cmp[f"A{r}"] = f'=IF({DI_SH}!A{di_r}="","",{DI_SH}!A{di_r})'
-    ws_cmp[f"B{r}"] = f'=IF($A{r}="","",{DI_SH}!C{di_r})'
-    ws_cmp[f"C{r}"] = f'=IF($A{r}="","",{DI_SH}!D{di_r})'
-    ws_cmp[f"D{r}"] = f'=IF($A{r}="","",{DI_SH}!E{di_r})'
-    ws_cmp[f"E{r}"] = f'=IF($A{r}="","",{DI_SH}!F{di_r})'
-    ws_cmp[f"F{r}"] = f'=IF($A{r}="","",{DI_SH}!G{di_r})'
-    ws_cmp[f"G{r}"] = f'=IF($A{r}="","",{DI_SH}!H{di_r})'
-    ws_cmp[f"O{r}"] = f'=IF($A{r}="","",{DI_SH}!O{di_r})'
+    # P: hidden helper — row index into DI for nth matching row
+    ws_cmp[f"P{r}"] = f'=IFERROR(SMALL(IF({CMP_BF},{CMP_ROW_IDX},""),{n}),"")'
 
-    # H-J: actual counts from inventory (COUNTIFS matching product name + status)
-    # Use the same hierarchical logic as desired inventory
+    # A-D: pull from desired inventory via INDEX
+    ws_cmp[f"A{r}"] = f'=IF($P{r}="","",INDEX({DI_A_R},$P{r}))'
+    ws_cmp[f"B{r}"] = f'=IF($P{r}="","",INDEX({DI_C_R},$P{r}))'
+    ws_cmp[f"C{r}"] = f'=IF($P{r}="","",INDEX({DI_D_R},$P{r}))'
+    ws_cmp[f"D{r}"] = f'=IF($P{r}="","",INDEX({DI_E_R},$P{r}))'
+    # E-G: targets
+    ws_cmp[f"E{r}"] = f'=IF($P{r}="","",INDEX({DI_F_R},$P{r}))'
+    ws_cmp[f"F{r}"] = f'=IF($P{r}="","",INDEX({DI_G_R},$P{r}))'
+    ws_cmp[f"G{r}"] = f'=IF($P{r}="","",INDEX({DI_H_R},$P{r}))'
+    # O: notes
+    ws_cmp[f"O{r}"] = f'=IF($P{r}="","",INDEX({DI_O_R},$P{r}))'
+
+    # H-J: actual counts (COUNTIFS from inventory, using displayed product+fabric)
     prod_cond = f'{DI}!$B$2:$B$500,$A{r}'
     fab_if = f'{DI}!$G$2:$G$500,$D{r},'
-
     for out_col, status in [("H", "בחדר תצוגה"), ("I", "בתיק הדגמה"), ("J", "מושאל")]:
         stat_cond = f'{DI}!$X$2:$X$500,"{status}"'
         ws_cmp[f"{out_col}{r}"] = (
@@ -1555,7 +1660,7 @@ for r in range(5, 5 + CMP_ROWS):
             f'COUNTIFS({prod_cond},{stat_cond})))'
         )
 
-    # K: total actual (all statuses)
+    # K: total actual (all items matching product+fabric with any ID)
     ws_cmp[f"K{r}"] = (
         f'=IF($A{r}="","",IF($D{r}<>"",'
         f'COUNTIFS({prod_cond},{fab_if}{DI}!$D$2:$D$500,"<>"),'
@@ -1564,25 +1669,26 @@ for r in range(5, 5 + CMP_ROWS):
 
     # L-N: gaps (target - actual, min 0)
     for tgt, act, gap in [("E", "H", "L"), ("F", "I", "M"), ("G", "J", "N")]:
-        ws_cmp[f"{gap}{r}"] = (
-            f'=IF(OR($A{r}="",$E{r}=""),"",MAX(0,{tgt}{r}-{act}{r}))'
-        )
+        ws_cmp[f"{gap}{r}"] = f'=IF(OR($A{r}="",$E{r}=""),"",MAX(0,{tgt}{r}-{act}{r}))'
 
-    # Style
-    for c in range(1, 16):
-        style_data(ws_cmp.cell(row=r, column=c), r - 5)
+    # Style all cells (including hidden P)
+    for c in range(1, 17):
+        style_data(ws_cmp.cell(row=r, column=c), r - 6)
 
 # Number format for target/actual/gap columns
 for col in ("E", "F", "G", "H", "I", "J", "K", "L", "M", "N"):
-    for r in range(5, 5 + CMP_ROWS):
+    for r in range(6, 6 + CMP_DISPLAY):
         ws_cmp[f"{col}{r}"].number_format = "0"
 
-# Conditional formatting: red when gap > 0
+# --- Conditional formatting ---
+CMP_LAST = 5 + CMP_DISPLAY  # 125
+
+# Red when gap > 0
 for gap_col in ("L", "M", "N"):
     ws_cmp.conditional_formatting.add(
-        f"{gap_col}5:{gap_col}{4 + CMP_ROWS}",
+        f"{gap_col}6:{gap_col}{CMP_LAST}",
         FormulaRule(
-            formula=[f'{gap_col}5>0'],
+            formula=[f'{gap_col}6>0'],
             font=Font(name="Calibri", bold=True, color="9C0006"),
             fill=PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
         ),
@@ -1591,35 +1697,15 @@ for gap_col in ("L", "M", "N"):
 # Green when gap = 0 and target > 0 (fully met)
 for gap_col, tgt_col in [("L", "E"), ("M", "F"), ("N", "G")]:
     ws_cmp.conditional_formatting.add(
-        f"{gap_col}5:{gap_col}{4 + CMP_ROWS}",
+        f"{gap_col}6:{gap_col}{CMP_LAST}",
         FormulaRule(
-            formula=[f'AND({gap_col}5=0,{tgt_col}5>0)'],
+            formula=[f'AND({gap_col}6=0,{tgt_col}6>0)'],
             font=Font(name="Calibri", bold=True, color="006100"),
             fill=PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"),
         ),
     )
 
-# --- Summary section at top (merged into D1-O1 area) ---
-# Use SUMPRODUCT for overall totals in row 3
-ws_cmp["E3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*E5:E{4+CMP_ROWS})'
-ws_cmp["F3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*F5:F{4+CMP_ROWS})'
-ws_cmp["G3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*G5:G{4+CMP_ROWS})'
-ws_cmp["L3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*L5:L{4+CMP_ROWS})'
-ws_cmp["M3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*M5:M{4+CMP_ROWS})'
-ws_cmp["N3"] = f'=SUMPRODUCT((A5:A{4+CMP_ROWS}<>"")*N5:N{4+CMP_ROWS})'
-for col in ("E", "F", "G", "L", "M", "N"):
-    c = ws_cmp[f"{col}3"]
-    c.font = Font(name="Calibri", bold=True, size=12, color="1F3864")
-    c.number_format = "0"
-
-# Labels for summary
-ws_cmp["D3"] = "סה\"כ:"
-ws_cmp["D3"].font = Font(name="Calibri", bold=True, size=12, color="1F3864")
-ws_cmp["K3"] = "סה\"כ פערים:"
-ws_cmp["K3"].font = Font(name="Calibri", bold=True, size=12, color="1F3864")
-
 # --- Protection ---
-# Unlock only filter cells
 for ref in ["A2", "B2", "C2"]:
     ws_cmp[ref].protection = UNLOCKED
 ws_cmp.protection.sheet = True

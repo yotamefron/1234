@@ -667,8 +667,14 @@ for sqref, f1 in dv_defs:
     ws_d.add_data_validation(dv)
 # C2 (product), D2 (version), B4 (country) — free text, default "הכל"
 
+# --- Results counter (visible in filter area) ---
+ws_d.merge_cells("G1:J1")
+ws_d["G1"] = "תוצאות סינון"
+ws_d["G1"].font = Font(name="Calibri", bold=True, size=11, color="1F3864")
+ws_d["G1"].alignment = Alignment(horizontal="center", vertical="center")
+
 # Column widths
-for col, w in {"A": 48, "B": 22, "C": 20, "D": 18, "E": 18,
+for col, w in {"A": 18, "B": 22, "C": 20, "D": 14, "E": 18,
                "F": 14, "G": 18, "H": 18, "I": 14, "J": 28, "K": 10}.items():
     ws_d.column_dimensions[col].width = w
 
@@ -766,13 +772,39 @@ ws_d["D17"].alignment = CELL_ALIGN
 ws_d["D17"].fill = SUMMARY_BG
 ws_d["D17"].border = THIN_BORDER
 
-# Row 18: empty separator
+# --- Results counter in filter area G2:J2 ---
+ws_d.merge_cells("G2:H2")
+ws_d["G2"] = f'=SUMPRODUCT({BF})'
+ws_d["G2"].font = Font(name="Calibri", bold=True, size=18, color="1F3864")
+ws_d["G2"].alignment = Alignment(horizontal="center", vertical="center")
+ws_d["G2"].fill = FILTER_VAL_FILL
+ws_d["G2"].border = THIN_BORDER
+ws_d["G2"].number_format = '0" פריטים"'
+ws_d.merge_cells("I2:J2")
+ws_d["I2"] = f'=COUNTIF({DI}!$D$2:$D$500,"<>")'
+ws_d["I2"].font = Font(name="Calibri", size=11, color="808080")
+ws_d["I2"].alignment = Alignment(horizontal="center", vertical="center")
+ws_d["I2"].fill = FILTER_VAL_FILL
+ws_d["I2"].border = THIN_BORDER
+ws_d["I2"].number_format = '"מתוך "0'
+
+# Summary section bottom border
+for c in range(1, 11):
+    cell = ws_d.cell(row=18, column=c)
+    cell.border = Border(bottom=Side(style="medium", color="1F3864"))
 
 # ---------------------------------------------------------------------------
 # Filtered Product Detail (rows 19–320)
 # ---------------------------------------------------------------------------
+ws_d.merge_cells("A19:C19")
 ws_d["A19"] = "פירוט פריטים מסוננים"
-ws_d["A19"].font = TITLE_FONT_D
+ws_d["A19"].font = Font(name="Calibri", bold=True, size=13, color="FFFFFF")
+ws_d["A19"].fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+ws_d["A19"].border = THIN_BORDER
+for c in range(4, 11):
+    ws_d.cell(row=19, column=c).fill = PatternFill(
+        start_color="2E75B6", end_color="2E75B6", fill_type="solid")
+    ws_d.cell(row=19, column=c).border = THIN_BORDER
 
 detail_headers = [
     "מזהה", "שם מוצר", "גרסה", "סוג בד", "הדפס A", "הדפס B",
@@ -813,6 +845,34 @@ for r in range(21, 321):
     # Style all cells in the row
     for c in range(1, 12):
         style_data(ws_d.cell(row=r, column=c), r - 21)
+
+# Detail conditional formatting — quality and status columns
+GREEN_FILL_D = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+GREEN_FONT_D = Font(name="Calibri", bold=True, color="006100")
+ORANGE_FILL_D = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+ORANGE_FONT_D = Font(name="Calibri", color="806000")
+
+# G column (visual OK): green when "כן"
+ws_d.conditional_formatting.add(
+    "G21:G320",
+    FormulaRule(formula=['G21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
+)
+# H column (thermal OK): green when "כן"
+ws_d.conditional_formatting.add(
+    "H21:H320",
+    FormulaRule(formula=['H21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
+)
+# I column (status): color by status
+ws_d.conditional_formatting.add(
+    "I21:I320",
+    FormulaRule(formula=['I21="מושאל"'], font=ORANGE_FONT_D, fill=ORANGE_FILL_D),
+)
+ws_d.conditional_formatting.add(
+    "I21:I320",
+    FormulaRule(formula=['I21="בחדר תצוגה"'],
+               font=Font(name="Calibri", color="1F4E79"),
+               fill=PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")),
+)
 
 # ---------------------------------------------------------------------------
 # Active Loans Detail (rows 322–423, always displayed)

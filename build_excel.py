@@ -557,7 +557,7 @@ for r in range(5, 105):
 
     # K: helper — row index of nth matching inventory row
     ws_l[f"K{r}"] = (
-        f"=IFERROR(SMALL(IF({FILTER_COND},{ROW_INDEX_ARRAY},\"\"),{n}),\"\")"
+        f'=IFERROR(AGGREGATE(15,6,({ROW_INDEX_ARRAY})/({FILTER_COND}),{n}),"")'
     )
 
     # A–H, J: pull data via INDEX using the helper row reference
@@ -668,14 +668,14 @@ for sqref, f1 in dv_defs:
 # C2 (product), D2 (version), B4 (country) — free text, default "הכל"
 
 # --- Results counter (visible in filter area) ---
-ws_d.merge_cells("G1:J1")
+ws_d.merge_cells("G1:H1")
 ws_d["G1"] = "תוצאות סינון"
 ws_d["G1"].font = Font(name="Calibri", bold=True, size=11, color="1F3864")
 ws_d["G1"].alignment = Alignment(horizontal="center", vertical="center")
 
 # Column widths
-for col, w in {"A": 18, "B": 22, "C": 20, "D": 14, "E": 18,
-               "F": 14, "G": 18, "H": 18, "I": 14, "J": 28, "K": 10}.items():
+for col, w in {"A": 16, "B": 42, "C": 24, "D": 12, "E": 12,
+               "F": 14, "G": 28, "H": 28, "I": 10}.items():
     ws_d.column_dimensions[col].width = w
 
 # ---------------------------------------------------------------------------
@@ -761,7 +761,7 @@ ws_d["A17"].font = METRIC_LABEL_FONT
 ws_d["A17"].alignment = CELL_ALIGN
 ws_d["A17"].fill = SUMMARY_BG
 ws_d["A17"].border = THIN_BORDER
-ws_d.merge_cells("D17:J17")
+ws_d.merge_cells("D17:H17")
 ws_d["D17"] = (
     f'=IF($A$2="הכל","—",IFERROR(TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
     f'{DI}!{R("M")},({DI}!{R("D")}<>"")*({DI}!{R("AE")}=FALSE)'
@@ -773,77 +773,116 @@ ws_d["D17"].fill = SUMMARY_BG
 ws_d["D17"].border = THIN_BORDER
 
 # --- Results counter in filter area G2:J2 ---
-ws_d.merge_cells("G2:H2")
 ws_d["G2"] = f'=SUMPRODUCT({BF})'
 ws_d["G2"].font = Font(name="Calibri", bold=True, size=18, color="1F3864")
 ws_d["G2"].alignment = Alignment(horizontal="center", vertical="center")
 ws_d["G2"].fill = FILTER_VAL_FILL
 ws_d["G2"].border = THIN_BORDER
 ws_d["G2"].number_format = '0" פריטים"'
-ws_d.merge_cells("I2:J2")
-ws_d["I2"] = f'=COUNTIF({DI}!$D$2:$D$500,"<>")'
-ws_d["I2"].font = Font(name="Calibri", size=11, color="808080")
-ws_d["I2"].alignment = Alignment(horizontal="center", vertical="center")
-ws_d["I2"].fill = FILTER_VAL_FILL
-ws_d["I2"].border = THIN_BORDER
-ws_d["I2"].number_format = '"מתוך "0'
+ws_d["H2"] = f'=COUNTIF({DI}!$D$2:$D$500,"<>")'
+ws_d["H2"].font = Font(name="Calibri", size=11, color="808080")
+ws_d["H2"].alignment = Alignment(horizontal="center", vertical="center")
+ws_d["H2"].fill = FILTER_VAL_FILL
+ws_d["H2"].border = THIN_BORDER
+ws_d["H2"].number_format = '"מתוך "0'
 
 # Summary section bottom border
-for c in range(1, 11):
+for c in range(1, 10):
     cell = ws_d.cell(row=18, column=c)
     cell.border = Border(bottom=Side(style="medium", color="1F3864"))
 
 # ---------------------------------------------------------------------------
 # Filtered Product Detail (rows 19–320)
 # ---------------------------------------------------------------------------
-ws_d.merge_cells("A19:C19")
+ws_d.merge_cells("A19:B19")
 ws_d["A19"] = "פירוט פריטים מסוננים"
 ws_d["A19"].font = Font(name="Calibri", bold=True, size=13, color="FFFFFF")
 ws_d["A19"].fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
 ws_d["A19"].border = THIN_BORDER
-for c in range(4, 11):
+for c in range(3, 10):
     ws_d.cell(row=19, column=c).fill = PatternFill(
         start_color="2E75B6", end_color="2E75B6", fill_type="solid")
     ws_d.cell(row=19, column=c).border = THIN_BORDER
 
 detail_headers = [
-    "מזהה", "שם מוצר", "גרסה", "סוג בד", "הדפס A", "הדפס B",
-    "תקין ויזואלי", "תקין תרמי", "סטטוס", "הערות",
+    "מזהה",           # A
+    "מוצר + פרטים",   # B (combined: name | fabric | version | size)
+    "הדפסים",         # C (combined A/B prints)
+    "ויזואלי",        # D
+    "תרמי",           # E
+    "סטטוס",          # F
+    "פרטי השאלה",     # G (loan details, only when מושאל)
+    "הערות",          # H
 ]
 for i, h in enumerate(detail_headers):
     cell = ws_d.cell(row=20, column=i + 1, value=h)
     style_header(cell)
 
-# Hidden helper column K
-style_header(ws_d.cell(row=20, column=11, value="row_ref"))
-ws_d.column_dimensions["K"].hidden = True
+# Hidden helper column I
+style_header(ws_d.cell(row=20, column=9, value="row_ref"))
+ws_d.column_dimensions["I"].hidden = True
 
 # Freeze rows 1-4 (filters stay visible when scrolling)
 ws_d.freeze_panes = "A5"
 
-# SMALL/IF row-index formula shared components
+# Row-index formula shared components
 D_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
-
-# Detail column → inventory column mapping
-det_map = {
-    "A": "D", "B": "B", "C": "C", "D": "G", "E": "M",
-    "F": "N", "G": "O", "H": "U", "I": "X", "J": "AC",
-}
 
 for r in range(21, 321):
     n = r - 20  # nth match
 
-    # K: helper — row index of nth matching inventory row
-    ws_d[f"K{r}"] = f'=IFERROR(SMALL(IF({BF},{D_ROW_IDX},""),{n}),"")'
+    # I: helper — row index of nth matching inventory row (AGGREGATE, no CSE needed)
+    ws_d[f"I{r}"] = f'=IFERROR(AGGREGATE(15,6,({D_ROW_IDX})/({BF}),{n}),"")'
 
-    # A–J: pull data via INDEX
-    for dcol, icol in det_map.items():
-        ws_d[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
-        )
+    # A: מזהה
+    ws_d[f"A{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("D")},$I{r}))'
 
-    # Style all cells in the row
-    for c in range(1, 12):
+    # B: מוצר + פרטים (name | fabric | version | size — only non-empty parts)
+    ws_d[f"B{r}"] = (
+        f'=IF($I{r}="","",INDEX({DI}!{R("B")},$I{r})'
+        f'&IF(INDEX({DI}!{R("G")},$I{r})<>""," | "&INDEX({DI}!{R("G")},$I{r}),"")'
+        f'&IF(INDEX({DI}!{R("C")},$I{r})<>""," | "&INDEX({DI}!{R("C")},$I{r}),"")'
+        f'&IF(INDEX({DI}!{R("I")},$I{r})<>""," ("&INDEX({DI}!{R("I")},$I{r})&")","")'
+        f')'
+    )
+
+    # C: הדפסים (combined A/B prints)
+    ws_d[f"C{r}"] = (
+        f'=IF($I{r}="","",INDEX({DI}!{R("M")},$I{r})'
+        f'&IF(INDEX({DI}!{R("N")},$I{r})<>""," / "&INDEX({DI}!{R("N")},$I{r}),"")'
+        f')'
+    )
+
+    # D: ויזואלי — כן if either side OK
+    ws_d[f"D{r}"] = (
+        f'=IF($I{r}="","",IF(OR('
+        f'INDEX({DI}!{R("O")},$I{r})="כן",'
+        f'INDEX({DI}!{R("P")},$I{r})="כן"),"כן","לא"))'
+    )
+
+    # E: תרמי — כן if either side OK
+    ws_d[f"E{r}"] = (
+        f'=IF($I{r}="","",IF(OR('
+        f'INDEX({DI}!{R("U")},$I{r})="כן",'
+        f'INDEX({DI}!{R("V")},$I{r})="כן"),"כן","לא"))'
+    )
+
+    # F: סטטוס
+    ws_d[f"F{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("X")},$I{r}))'
+
+    # G: פרטי השאלה (only when status=מושאל: who | country | expected return)
+    ws_d[f"G{r}"] = (
+        f'=IF($I{r}="","",IF(INDEX({DI}!{R("X")},$I{r})="מושאל",'
+        f'INDEX({DI}!{R("Y")},$I{r})&" | "&INDEX({DI}!{R("Z")},$I{r})'
+        f'&IF(INDEX({DI}!{R("AB")},$I{r})<>""," | "&TEXT(INDEX({DI}!{R("AB")},$I{r}),"DD/MM/YYYY"),"")'
+        f',""))'
+    )
+
+    # H: הערות
+    ws_d[f"H{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("AC")},$I{r}))'
+
+    # Style all cells in the row (A-I)
+    for c in range(1, 10):
         style_data(ws_d.cell(row=r, column=c), r - 21)
 
 # Detail conditional formatting — quality and status columns
@@ -852,24 +891,24 @@ GREEN_FONT_D = Font(name="Calibri", bold=True, color="006100")
 ORANGE_FILL_D = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 ORANGE_FONT_D = Font(name="Calibri", color="806000")
 
-# G column (visual OK): green when "כן"
+# D column (visual OK): green when "כן"
 ws_d.conditional_formatting.add(
-    "G21:G320",
-    FormulaRule(formula=['G21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
+    "D21:D320",
+    FormulaRule(formula=['D21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
 )
-# H column (thermal OK): green when "כן"
+# E column (thermal OK): green when "כן"
 ws_d.conditional_formatting.add(
-    "H21:H320",
-    FormulaRule(formula=['H21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
+    "E21:E320",
+    FormulaRule(formula=['E21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
 )
-# I column (status): color by status
+# F column (status): color by status
 ws_d.conditional_formatting.add(
-    "I21:I320",
-    FormulaRule(formula=['I21="מושאל"'], font=ORANGE_FONT_D, fill=ORANGE_FILL_D),
+    "F21:F320",
+    FormulaRule(formula=['F21="מושאל"'], font=ORANGE_FONT_D, fill=ORANGE_FILL_D),
 )
 ws_d.conditional_formatting.add(
-    "I21:I320",
-    FormulaRule(formula=['I21="בחדר תצוגה"'],
+    "F21:F320",
+    FormulaRule(formula=['F21="בחדר תצוגה"'],
                font=Font(name="Calibri", color="1F4E79"),
                fill=PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")),
 )
@@ -884,7 +923,7 @@ LOAN_E = 423        # last data row
 
 # Visual separator before loans section
 LOAN_SEP_FILL = PatternFill(start_color="1F3864", end_color="1F3864", fill_type="solid")
-for c in range(1, 11):
+for c in range(1, 10):
     cell = ws_d.cell(row=LOAN_T - 1, column=c)
     cell.fill = LOAN_SEP_FILL
     cell.border = THIN_BORDER
@@ -892,7 +931,7 @@ for c in range(1, 11):
 ws_d[f"A{LOAN_T}"] = "השאלות פעילות"
 ws_d[f"A{LOAN_T}"].font = Font(name="Calibri", bold=True, size=14, color="FFFFFF")
 ws_d[f"A{LOAN_T}"].fill = PatternFill(start_color="2E75B6", end_color="2E75B6", fill_type="solid")
-for c in range(1, 11):
+for c in range(1, 10):
     ws_d.cell(row=LOAN_T, column=c).fill = PatternFill(
         start_color="2E75B6", end_color="2E75B6", fill_type="solid")
     ws_d.cell(row=LOAN_T, column=c).border = THIN_BORDER
@@ -904,6 +943,7 @@ for i, h in enumerate(loan_d_headers):
 
 # Reuse column K as helper for the loans row range
 style_header(ws_d.cell(row=LOAN_H, column=11, value="loan_ref"))
+ws_d.column_dimensions["K"].hidden = True
 
 # Loan filter: status = מושאל (always, no dashboard filter)
 LOAN_COND = f'({DI}!{R("D")}<>"")*({DI}!{R("X")}="מושאל")'
@@ -914,7 +954,7 @@ for r in range(LOAN_S, LOAN_E + 1):
     n = r - LOAN_S + 1
 
     # K: helper
-    ws_d[f"K{r}"] = f'=IFERROR(SMALL(IF({LOAN_COND},{D_ROW_IDX},""),{n}),"")'
+    ws_d[f"K{r}"] = f'=IFERROR(AGGREGATE(15,6,({D_ROW_IDX})/({LOAN_COND}),{n}),"")'
 
     # A–F: pull data
     for dcol, icol in loan_d_map.items():
@@ -1253,7 +1293,7 @@ for r in range(23, 323):
     n = r - 22  # nth match
 
     # K: helper — row index of nth matching inventory row
-    ws_t[f"K{r}"] = f'=IFERROR(SMALL(IF({BF_TECH},{T_ROW_IDX},""),{n}),"")'
+    ws_t[f"K{r}"] = f'=IFERROR(AGGREGATE(15,6,({T_ROW_IDX})/({BF_TECH}),{n}),"")'
 
     # A–J: pull data from inventory
     for dcol, icol in t_det_map.items():
@@ -1294,7 +1334,7 @@ t_loan_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 
 for r in range(T_LN_S, T_LN_E + 1):
     n = r - T_LN_S + 1
-    ws_t[f"K{r}"] = f'=IFERROR(SMALL(IF({T_LOAN_COND},{T_ROW_IDX},""),{n}),"")'
+    ws_t[f"K{r}"] = f'=IFERROR(AGGREGATE(15,6,({T_ROW_IDX})/({T_LOAN_COND}),{n}),"")'
     for dcol, icol in t_loan_map.items():
         ws_t[f"{dcol}{r}"] = (
             f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
@@ -1695,7 +1735,7 @@ for r in range(6, 6 + CMP_DISPLAY):
     n = r - 5  # nth match
 
     # P: hidden helper — row index into DI for nth matching row
-    ws_cmp[f"P{r}"] = f'=IFERROR(SMALL(IF({CMP_BF},{CMP_ROW_IDX},""),{n}),"")'
+    ws_cmp[f"P{r}"] = f'=IFERROR(AGGREGATE(15,6,({CMP_ROW_IDX})/({CMP_BF}),{n}),"")'
 
     # A-D: pull from desired inventory via INDEX
     ws_cmp[f"A{r}"] = f'=IF($P{r}="","",INDEX({DI_A_R},$P{r}))'

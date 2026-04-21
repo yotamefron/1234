@@ -3,6 +3,7 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, Protecti
 from openpyxl.utils import get_column_letter
 from openpyxl.workbook.defined_name import DefinedName
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.formula import ArrayFormula
 from openpyxl.formatting.rule import FormulaRule
 import datetime
 
@@ -141,6 +142,9 @@ cr, pr_start, pr_end = write_table(ws_s, cr, 1,
 
 # Single-column named range for print name dropdowns
 add_named("שמות_הדפסים", f"'הגדרות'!$A${pr_start}:$A${pr_end}")
+
+# Build print names CSV for filter dropdowns (with הכל prefix)
+PRINT_NAMES_CSV = '"הכל,' + ",".join(p[0] for p in prints_data) + '"'
 
 # TABLE 3 — Product Lines
 cr, _, _ = write_table(ws_s, cr, 1, ["קו מוצר"],
@@ -475,7 +479,7 @@ for i, label in enumerate(filter_labels):
 
 # A2 (מדינה): dropdown with common countries
 dv = DataValidation(type="list",
-    formula1='"הכל,ישראל,ארה\"ב,גרמניה,צרפת,בריטניה,הודו,קנדה,אוסטרליה,אחר"',
+    formula1='"הכל,ישראל,ארה״ב,גרמניה,צרפת,בריטניה,הודו,קנדה,אוסטרליה,אחר"',
     allow_blank=True)
 dv.sqref = "A2"
 ws_l.add_data_validation(dv)
@@ -555,9 +559,10 @@ inv_col_map = {
 for r in range(5, 105):
     n = r - 4  # nth match
 
-    # K: helper — row index of nth matching inventory row
-    ws_l[f"K{r}"] = (
-        f'=IFERROR(AGGREGATE(15,6,({ROW_INDEX_ARRAY})/({FILTER_COND}),{n}),"")'
+    # K: helper — row index of nth matching inventory row (CSE array formula)
+    ws_l[f"K{r}"] = ArrayFormula(
+        ref=f"K{r}",
+        text=f'=IFERROR(SMALL(IF({FILTER_COND},{ROW_INDEX_ARRAY}),{n}),"")'
     )
 
     # A–H, J: pull data via INDEX using the helper row reference
@@ -632,8 +637,8 @@ for i, label in enumerate(filter_r1):
     val.alignment = CELL_ALIGN
     val.border = THIN_BORDER
 
-# Row 3–4: last 5 filters
-filter_r2 = ["סטטוס", "מדינה", "תקינות ויזואלית", "תקינות תרמית", "גרסה סופית"]
+# Row 3–4: last 6 filters (added הדפס)
+filter_r2 = ["סטטוס", "מדינה", "תקינות ויזואלית", "תקינות תרמית", "גרסה סופית", "הדפס"]
 for i, label in enumerate(filter_r2):
     c = i + 1
     cell = ws_d.cell(row=3, column=c, value=label)
@@ -665,7 +670,21 @@ for sqref, f1 in dv_defs:
     dv = DataValidation(type="list", formula1=f1, allow_blank=True)
     dv.sqref = sqref
     ws_d.add_data_validation(dv)
-# C2 (product), D2 (version), B4 (country) — free text, default "הכל"
+# C2 (product), B4 (country) — free text, default "הכל"
+
+# D2 (version): dropdown with common versions, but also allows free text
+dv = DataValidation(type="list",
+    formula1='"הכל,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,Mk1,Mk2,Mk3"',
+    allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "D2"
+ws_d.add_data_validation(dv)
+
+# F4 (print): dropdown with all print names + הכל, allows free text
+dv = DataValidation(type="list", formula1=PRINT_NAMES_CSV, allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "F4"
+ws_d.add_data_validation(dv)
 
 # --- Results counter (visible in filter area) ---
 ws_d.merge_cells("G1:H1")
@@ -693,19 +712,25 @@ def dflt(dash_cell, inv_col):
 F_DATA = f'({DI}!{R("D")}<>"")'
 F_ENV  = f'(--{DI}!{R("AE")})'
 
-# Build full base‐filter string  (data × env × 10 user filters)
+# Print filter: match either print A (M) or print B (N)
+F_PRINT = (f'(IF($F$4="הכל",1,'
+           f'({DI}!{R("M")}=$F$4)+({DI}!{R("N")}=$F$4)>0))')
+
+# Build full base‐filter string  (data × env × 11 user filters)
 BF = (f'{F_DATA}*{F_ENV}'
       f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
       f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
       f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
-      f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
+      f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
+      f'*{F_PRINT}')
 
 # Base filter WITHOUT env (for "wrong‐print" metric)
 BF_NE = (f'{F_DATA}'
          f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
          f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
          f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
-         f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
+         f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
+         f'*{F_PRINT}')
 
 # Section title
 ws_d["A5"] = "סיכום"
@@ -831,8 +856,11 @@ D_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
 for r in range(21, 321):
     n = r - 20  # nth match
 
-    # I: helper — row index of nth matching inventory row (AGGREGATE, no CSE needed)
-    ws_d[f"I{r}"] = f'=IFERROR(AGGREGATE(15,6,({D_ROW_IDX})/({BF}),{n}),"")'
+    # I: helper — row index of nth matching inventory row (CSE array formula)
+    ws_d[f"I{r}"] = ArrayFormula(
+        ref=f"I{r}",
+        text=f'=IFERROR(SMALL(IF({BF},{D_ROW_IDX}),{n}),"")'
+    )
 
     # A: מזהה
     ws_d[f"A{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("D")},$I{r}))'
@@ -954,7 +982,10 @@ for r in range(LOAN_S, LOAN_E + 1):
     n = r - LOAN_S + 1
 
     # K: helper
-    ws_d[f"K{r}"] = f'=IFERROR(AGGREGATE(15,6,({D_ROW_IDX})/({LOAN_COND}),{n}),"")'
+    ws_d[f"K{r}"] = ArrayFormula(
+        ref=f"K{r}",
+        text=f'=IFERROR(SMALL(IF({LOAN_COND},{D_ROW_IDX}),{n}),"")'
+    )
 
     # A–F: pull data
     for dcol, icol in loan_d_map.items():
@@ -1080,7 +1111,7 @@ for i, label in enumerate(filter_r1):
     val.alignment = CELL_ALIGN
     val.border = THIN_BORDER
 
-# Row 3–4: next 5 filters
+# Row 3–4: next 6 filters (same as regular dashboard including הדפס)
 for i, label in enumerate(filter_r2):
     c = i + 1
     cell = ws_t.cell(row=3, column=c, value=label)
@@ -1117,6 +1148,20 @@ for sqref, f1 in dv_defs:
     dv.sqref = sqref
     ws_t.add_data_validation(dv)
 
+# D2 (version): dropdown with common versions, allows free text
+dv = DataValidation(type="list",
+    formula1='"הכל,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,Mk1,Mk2,Mk3"',
+    allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "D2"
+ws_t.add_data_validation(dv)
+
+# F4 (print): dropdown with all print names + הכל, allows free text
+dv = DataValidation(type="list", formula1=PRINT_NAMES_CSV, allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "F4"
+ws_t.add_data_validation(dv)
+
 # Novel filter (A6)
 dv = DataValidation(type="list", formula1='"הכל,כן,לא"', allow_blank=True)
 dv.sqref = "A6"
@@ -1144,7 +1189,8 @@ BF_T = (f'{F_DATA}*({T_ENV})'
         f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
         f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
         f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
-        f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}')
+        f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
+        f'*{F_PRINT}')
 
 # MATCH expression: find inventory item in tech values sheet
 TMATCH = f'MATCH({DI}!{R("D")},{TV}!{R("A")},0)'
@@ -1293,7 +1339,10 @@ for r in range(23, 323):
     n = r - 22  # nth match
 
     # K: helper — row index of nth matching inventory row
-    ws_t[f"K{r}"] = f'=IFERROR(AGGREGATE(15,6,({T_ROW_IDX})/({BF_TECH}),{n}),"")'
+    ws_t[f"K{r}"] = ArrayFormula(
+        ref=f"K{r}",
+        text=f'=IFERROR(SMALL(IF({BF_TECH},{T_ROW_IDX}),{n}),"")'
+    )
 
     # A–J: pull data from inventory
     for dcol, icol in t_det_map.items():
@@ -1334,7 +1383,10 @@ t_loan_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 
 for r in range(T_LN_S, T_LN_E + 1):
     n = r - T_LN_S + 1
-    ws_t[f"K{r}"] = f'=IFERROR(AGGREGATE(15,6,({T_ROW_IDX})/({T_LOAN_COND}),{n}),"")'
+    ws_t[f"K{r}"] = ArrayFormula(
+        ref=f"K{r}",
+        text=f'=IFERROR(SMALL(IF({T_LOAN_COND},{T_ROW_IDX}),{n}),"")'
+    )
     for dcol, icol in t_loan_map.items():
         ws_t[f"{dcol}{r}"] = (
             f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
@@ -1526,7 +1578,7 @@ ws_s.protection.enable()
 # --- Dashboard (ws_d) — unlock only filter cells ---
 # Filter cells: A2, B2, C2, D2, E2, F2, A4, B4, C4, D4, E4
 dash_unlock = ["A2", "B2", "C2", "D2", "E2", "F2",
-               "A4", "B4", "C4", "D4", "E4"]
+               "A4", "B4", "C4", "D4", "E4", "F4"]
 for ref in dash_unlock:
     ws_d[ref].protection = UNLOCKED
 ws_d.protection.sheet = True
@@ -1735,7 +1787,10 @@ for r in range(6, 6 + CMP_DISPLAY):
     n = r - 5  # nth match
 
     # P: hidden helper — row index into DI for nth matching row
-    ws_cmp[f"P{r}"] = f'=IFERROR(AGGREGATE(15,6,({CMP_ROW_IDX})/({CMP_BF}),{n}),"")'
+    ws_cmp[f"P{r}"] = ArrayFormula(
+        ref=f"P{r}",
+        text=f'=IFERROR(SMALL(IF({CMP_BF},{CMP_ROW_IDX}),{n}),"")'
+    )
 
     # A-D: pull from desired inventory via INDEX
     ws_cmp[f"A{r}"] = f'=IF($P{r}="","",INDEX({DI_A_R},$P{r}))'

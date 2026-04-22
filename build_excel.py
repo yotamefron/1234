@@ -278,7 +278,11 @@ cr, sku_start, sku_end = write_table(ws_s, cr, 1,
     ["מוצר", "סוג בד", "גרסה", 'מק"ט'], sku_data, "מקטים")
 
 # TABLE 10 — Versions (extracted from SKU data)
-version_values = sorted(set(row[2] for row in sku_data))
+_sku_versions = sorted(v for v in set(row[2] for row in sku_data) if v)
+_extra_versions = ["ARBEL", "ELITE", "Eclipse", "LTD", "Less is More",
+                   "MERON", "Maritime", "V2 3D", "alpha", "bagi",
+                   "one side"]
+version_values = sorted(set(_sku_versions + _extra_versions))
 cr, ver_start, ver_end = write_table(ws_s, cr, 1, ["גרסה"],
     [[v] for v in version_values], "גרסאות")
 

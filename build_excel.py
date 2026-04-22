@@ -201,6 +201,10 @@ t4_data = [
     ["Accessories", "חלקים של עמדות", ""],
     ["Accessories", "Blackout hood", ""],
     ["Accessories", "Weapon Wraps", ""],
+    ["Accessories", "Bag cover 90L", ""],
+    ["Platform On-The-Move", "MRZR cover", ""],
+    ["Hide Site", "Vehicle hide site 9*12", ""],
+    ["Hide Site", "Vehicle hide site 9*13", ""],
 ]
 cr, prod_start, prod_end = write_table(ws_s, cr, 1,
     ["קו מוצר", "שם מוצר", "גרסאות זמינות"], t4_data, "מוצרים")
@@ -281,10 +285,23 @@ cr, sku_start, sku_end = write_table(ws_s, cr, 1,
 _sku_versions = sorted(v for v in set(row[2] for row in sku_data) if v)
 _extra_versions = ["ARBEL", "ELITE", "Eclipse", "LTD", "Less is More",
                    "MERON", "Maritime", "V2 3D", "alpha", "bagi",
-                   "one side"]
+                   "one side", "אדם, דגם-2", "ארוכה", "ישראלי"]
 version_values = sorted(set(_sku_versions + _extra_versions))
 cr, ver_start, ver_end = write_table(ws_s, cr, 1, ["גרסה"],
     [[v] for v in version_values], "גרסאות")
+
+# TABLE 11 — All product names for dashboard filter dropdown
+all_product_names = sorted(set(row[1] for row in t4_data))
+all_products_with_all = [["הכל"]] + [[n] for n in all_product_names]
+cr, ap_start, ap_end = write_table(ws_s, cr, 1, ["שם מוצר (סינון)"],
+    all_products_with_all, "כל_שמות_המוצרים")
+
+# TABLE 12 — Countries for dashboard filter dropdown
+country_data = [["הכל"], ["ישראל"], ['ארה"ב'], ["גרמניה"], ["צרפת"],
+                ["בריטניה"], ["הודו"], ["קנדה"], ["אוסטרליה"],
+                ["אחר"]]
+cr, cn_start, cn_end = write_table(ws_s, cr, 1, ["מדינה"],
+    country_data, "מדינות_סינון")
 
 # Build CSV strings for filter dropdowns (with הכל prefix)
 FABRIC_NAMES_CSV = '"הכל,' + ",".join(row[0] for row in [
@@ -690,7 +707,20 @@ for sqref, f1 in dv_defs:
     dv.showErrorMessage = False
     dv.sqref = sqref
     ws_d.add_data_validation(dv)
-# C2 (product), B4 (country) — free text, default "הכל"
+
+# C2 (product): dependent dropdown — when B2="הכל" show all products, else per-line
+dv = DataValidation(type="list",
+    formula1='INDIRECT(IF(B2="הכל","כל_שמות_המוצרים",SUBSTITUTE(SUBSTITUTE(B2," ","_"),"-","_")))',
+    allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "C2"
+ws_d.add_data_validation(dv)
+
+# B4 (country)
+dv = DataValidation(type="list", formula1="מדינות_סינון", allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "B4"
+ws_d.add_data_validation(dv)
 
 # --- Results counter (visible in filter area) ---
 ws_d.merge_cells("H1:I1")
@@ -1232,6 +1262,20 @@ for sqref, f1 in dv_defs:
     dv.sqref = sqref
     ws_t.add_data_validation(dv)
 
+# C2 (product): same dependent dropdown
+dv = DataValidation(type="list",
+    formula1='INDIRECT(IF(B2="הכל","כל_שמות_המוצרים",SUBSTITUTE(SUBSTITUTE(B2," ","_"),"-","_")))',
+    allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "C2"
+ws_t.add_data_validation(dv)
+
+# B4 (country)
+dv = DataValidation(type="list", formula1="מדינות_סינון", allow_blank=True)
+dv.showErrorMessage = False
+dv.sqref = "B4"
+ws_t.add_data_validation(dv)
+
 # Novel filter (A6)
 dv = DataValidation(type="list", formula1='"הכל,כן,לא"', allow_blank=True)
 dv.sqref = "A6"
@@ -1724,10 +1768,10 @@ PL_A = f"{ST_SH}!$A${prod_start}:$A${prod_end}"
 PL_B = f"{ST_SH}!$B${prod_start}:$B${prod_end}"
 
 # --- Filter condition (evaluated over all 120 DI rows) ---
-CMP_HAS_DATA = f'({DI_A_R}<>"")'
-CMP_F_ENV  = f'(IF($A$2="הכל",1,{DI_C_R}=$A$2))'
+CMP_HAS_DATA = f'(--({DI_A_R}<>""))'
+CMP_F_ENV  = f'(IF($A$2="הכל",1,--({DI_C_R}=$A$2)))'
 CMP_F_PL   = f'(IF($B$2="הכל",1,IFERROR(--(INDEX({PL_A},MATCH({DI_A_R},{PL_B},0))=$B$2),0)))'
-CMP_F_FAB  = f'(IF($C$2="הכל",1,{DI_E_R}=$C$2))'
+CMP_F_FAB  = f'(IF($C$2="הכל",1,--({DI_E_R}=$C$2)))'
 CMP_BF = f'{CMP_HAS_DATA}*{CMP_F_ENV}*{CMP_F_PL}*{CMP_F_FAB}'
 CMP_ROW_IDX = f"ROW({DI_A_R})-ROW({DI_SH}!$A$2)+1"
 
@@ -1755,12 +1799,14 @@ ws_cmp["E1"].alignment = Alignment(horizontal="center", vertical="center")
 dv = DataValidation(type="list",
     formula1='"הכל,מדברי,מיוער,שלג,ימי,מבולדר/שטח בנוי,אחר"',
     allow_blank=True)
+dv.showErrorMessage = False
 dv.sqref = "A2"
 ws_cmp.add_data_validation(dv)
 dv = DataValidation(type="list",
     formula1='"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,'
              'Blankets,Urban,Platform On-The-Move,Accessories"',
     allow_blank=True)
+dv.showErrorMessage = False
 dv.sqref = "B2"
 ws_cmp.add_data_validation(dv)
 dv = DataValidation(type="list", formula1=FABRIC_NAMES_CSV, allow_blank=True)

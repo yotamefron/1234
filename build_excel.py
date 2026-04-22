@@ -277,6 +277,20 @@ sku_data = [
 cr, sku_start, sku_end = write_table(ws_s, cr, 1,
     ["מוצר", "סוג בד", "גרסה", 'מק"ט'], sku_data, "מקטים")
 
+# TABLE 10 — Versions (extracted from SKU data)
+version_values = sorted(set(row[2] for row in sku_data))
+cr, ver_start, ver_end = write_table(ws_s, cr, 1, ["גרסה"],
+    [[v] for v in version_values], "גרסאות")
+
+# Build CSV strings for filter dropdowns (with הכל prefix)
+FABRIC_NAMES_CSV = '"הכל,' + ",".join(row[0] for row in [
+    ["Sahar"], ["Inbar"], ["SRV"], ["Gabardine"], ["Meron"], ["Arber"],
+    ["IRR"], ["Polar"], ["Nylon"], ["Mesh"], ["PVC"], ["Other"],
+    ["RIPSTOP"], ["RIPSTOP Double Layer"], ["Beti"], ["MRG"], ["3D"],
+    ["WaterProof Blackout Fabric"], ["רשת רכב"], ["Stretch"],
+    ["Durable"], ["SMT"], ["LOKI Material"], ["אחר"]]) + '"'
+VERSION_NAMES_CSV = '"הכל,' + ",".join(version_values) + '"'
+
 
 # ===========================================================================
 # Build מלאי (Inventory) sheet
@@ -637,8 +651,9 @@ for i, label in enumerate(filter_r1):
     val.alignment = CELL_ALIGN
     val.border = THIN_BORDER
 
-# Row 3–4: last 6 filters (added הדפס)
-filter_r2 = ["סטטוס", "מדינה", "תקינות ויזואלית", "תקינות תרמית", "גרסה סופית", "הדפס"]
+# Row 3–4: 7 filters
+filter_r2 = ["סטטוס", "מדינה", "תקינות ויזואלית", "תקינות תרמית",
+             "גרסה סופית", "הדפס", "צדדיות"]
 for i, label in enumerate(filter_r2):
     c = i + 1
     cell = ws_d.cell(row=3, column=c, value=label)
@@ -656,45 +671,32 @@ dv_defs = [
     ("A2", '"הכל,מדברי,מיוער,שלג,ימי,מבולדר/שטח בנוי,אחר"'),
     ("B2", '"הכל,OverGarment,Hide Site,Platform Hide Site,Uniform,'
            'Blankets,Urban,Platform On-The-Move,Accessories"'),
-    ("E2", '"הכל,Sahar,Inbar,SRV,Gabardine,Meron,Arber,IRR,'
-           'Polar,Nylon,Mesh,PVC,Other,RIPSTOP,RIPSTOP Double Layer,'
-           'Beti,MRG,3D,WaterProof Blackout Fabric,רשת רכב,'
-           'Stretch,Durable,SMT,LOKI Material,אחר"'),
+    ("D2", VERSION_NAMES_CSV),
+    ("E2", FABRIC_NAMES_CSV),
     ("F2", '"הכל,XS,S,M,L,XL,XXL,XXXL,One Size,N/A"'),
     ("A4", '"הכל,במלאי,מושאל,בחדר תצוגה,בתיק הדגמה"'),
     ("C4", '"הכל,כן,לא"'),
     ("D4", '"הכל,כן,לא"'),
     ("E4", '"הכל,כן,לא"'),
+    ("F4", PRINT_NAMES_CSV),
+    ("G4", '"הכל,חד צדדי,דו צדדי"'),
 ]
 for sqref, f1 in dv_defs:
     dv = DataValidation(type="list", formula1=f1, allow_blank=True)
+    dv.showErrorMessage = False
     dv.sqref = sqref
     ws_d.add_data_validation(dv)
 # C2 (product), B4 (country) — free text, default "הכל"
 
-# D2 (version): dropdown with common versions, but also allows free text
-dv = DataValidation(type="list",
-    formula1='"הכל,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,Mk1,Mk2,Mk3"',
-    allow_blank=True)
-dv.showErrorMessage = False
-dv.sqref = "D2"
-ws_d.add_data_validation(dv)
-
-# F4 (print): dropdown with all print names + הכל, allows free text
-dv = DataValidation(type="list", formula1=PRINT_NAMES_CSV, allow_blank=True)
-dv.showErrorMessage = False
-dv.sqref = "F4"
-ws_d.add_data_validation(dv)
-
 # --- Results counter (visible in filter area) ---
-ws_d.merge_cells("G1:H1")
-ws_d["G1"] = "תוצאות סינון"
-ws_d["G1"].font = Font(name="Calibri", bold=True, size=11, color="1F3864")
-ws_d["G1"].alignment = Alignment(horizontal="center", vertical="center")
+ws_d.merge_cells("H1:I1")
+ws_d["H1"] = "תוצאות סינון"
+ws_d["H1"].font = Font(name="Calibri", bold=True, size=11, color="1F3864")
+ws_d["H1"].alignment = Alignment(horizontal="center", vertical="center")
 
 # Column widths
-for col, w in {"A": 16, "B": 42, "C": 24, "D": 12, "E": 12,
-               "F": 14, "G": 28, "H": 28, "I": 10}.items():
+for col, w in {"A": 16, "B": 22, "C": 34, "D": 24, "E": 12,
+               "F": 12, "G": 14, "H": 22, "I": 10, "J": 10}.items():
     ws_d.column_dimensions[col].width = w
 
 # ---------------------------------------------------------------------------
@@ -705,24 +707,28 @@ DI = "מלאי"                 # inventory sheet name
 
 
 def dflt(dash_cell, inv_col):
-    """Dashboard filter term: pass all when 'הכל', else exact match."""
-    return f'(IF({dash_cell}="הכל",1,{DI}!{R(inv_col)}={dash_cell}))'
+    """Dashboard filter term: pass all when 'הכל', else exact match (numeric 1/0)."""
+    return f'(IF({dash_cell}="הכל",1,--({DI}!{R(inv_col)}={dash_cell})))'
 
 
-F_DATA = f'({DI}!{R("D")}<>"")'
+F_DATA = f'(--({DI}!{R("D")}<>""))'
 F_ENV  = f'(--{DI}!{R("AE")})'
 
 # Print filter: match either print A (M) or print B (N)
 F_PRINT = (f'(IF($F$4="הכל",1,'
-           f'({DI}!{R("M")}=$F$4)+({DI}!{R("N")}=$F$4)>0))')
+           f'--(({DI}!{R("M")}=$F$4)+({DI}!{R("N")}=$F$4)>0)))')
 
-# Build full base‐filter string  (data × env × 11 user filters)
+# Sidedness filter: חד צדדי = no print B, דו צדדי = has print B
+F_SIDES = (f'(IF($G$4="הכל",1,'
+           f'IF($G$4="דו צדדי",--({DI}!{R("N")}<>""),--({DI}!{R("N")}=""))))')
+
+# Build full base‐filter string  (data × env × 13 user filters)
 BF = (f'{F_DATA}*{F_ENV}'
       f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
       f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
       f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
       f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
-      f'*{F_PRINT}')
+      f'*{F_PRINT}*{F_SIDES}')
 
 # Base filter WITHOUT env (for "wrong‐print" metric)
 BF_NE = (f'{F_DATA}'
@@ -730,7 +736,15 @@ BF_NE = (f'{F_DATA}'
          f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
          f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
          f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
-         f'*{F_PRINT}')
+         f'*{F_PRINT}*{F_SIDES}')
+
+# Base filter WITHOUT print (for side section)
+BF_NO_PRINT = (f'{F_DATA}*{F_ENV}'
+               f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
+               f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
+               f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
+               f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
+               f'*{F_SIDES}')
 
 # Section title
 ws_d["A5"] = "סיכום"
@@ -797,19 +811,19 @@ ws_d["D17"].alignment = CELL_ALIGN
 ws_d["D17"].fill = SUMMARY_BG
 ws_d["D17"].border = THIN_BORDER
 
-# --- Results counter in filter area G2:J2 ---
-ws_d["G2"] = f'=SUMPRODUCT({BF})'
-ws_d["G2"].font = Font(name="Calibri", bold=True, size=18, color="1F3864")
-ws_d["G2"].alignment = Alignment(horizontal="center", vertical="center")
-ws_d["G2"].fill = FILTER_VAL_FILL
-ws_d["G2"].border = THIN_BORDER
-ws_d["G2"].number_format = '0" פריטים"'
-ws_d["H2"] = f'=COUNTIF({DI}!$D$2:$D$500,"<>")'
-ws_d["H2"].font = Font(name="Calibri", size=11, color="808080")
+# --- Results counter in filter area H2:I2 ---
+ws_d["H2"] = f'=SUMPRODUCT({BF})'
+ws_d["H2"].font = Font(name="Calibri", bold=True, size=18, color="1F3864")
 ws_d["H2"].alignment = Alignment(horizontal="center", vertical="center")
 ws_d["H2"].fill = FILTER_VAL_FILL
 ws_d["H2"].border = THIN_BORDER
-ws_d["H2"].number_format = '"מתוך "0'
+ws_d["H2"].number_format = '0" פריטים"'
+ws_d["I2"] = f'=COUNTIF({DI}!$D$2:$D$500,"<>")'
+ws_d["I2"].font = Font(name="Calibri", size=11, color="808080")
+ws_d["I2"].alignment = Alignment(horizontal="center", vertical="center")
+ws_d["I2"].fill = FILTER_VAL_FILL
+ws_d["I2"].border = THIN_BORDER
+ws_d["I2"].number_format = '"מתוך "0'
 
 # Summary section bottom border
 for c in range(1, 10):
@@ -831,19 +845,19 @@ for c in range(3, 10):
 
 detail_headers = [
     "מזהה",           # A
-    "מוצר + פרטים",   # B (combined: name | fabric | version | size)
-    "הדפסים",         # C (combined A/B prints)
-    "ויזואלי",        # D
-    "תרמי",           # E
-    "סטטוס",          # F
-    "פרטי השאלה",     # G (loan details, only when מושאל)
-    "הערות",          # H
+    "מוצר",           # B (product name only)
+    "פרטים + הערות",  # C (version | fabric | size | notes)
+    "הדפסים",         # D (combined A/B prints)
+    "ויזואלי",        # E
+    "תרמי",           # F
+    "סטטוס",          # G
+    "פרטי השאלה",     # H (loan details, only when מושאל)
 ]
 for i, h in enumerate(detail_headers):
     cell = ws_d.cell(row=20, column=i + 1, value=h)
     style_header(cell)
 
-# Hidden helper column I
+# Hidden helper columns I (row_ref) and J (not used in detail but reserved)
 style_header(ws_d.cell(row=20, column=9, value="row_ref"))
 ws_d.column_dimensions["I"].hidden = True
 
@@ -865,81 +879,146 @@ for r in range(21, 321):
     # A: מזהה
     ws_d[f"A{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("D")},$I{r}))'
 
-    # B: מוצר + פרטים (name | fabric | version | size — only non-empty parts)
-    ws_d[f"B{r}"] = (
-        f'=IF($I{r}="","",INDEX({DI}!{R("B")},$I{r})'
-        f'&IF(INDEX({DI}!{R("G")},$I{r})<>""," | "&INDEX({DI}!{R("G")},$I{r}),"")'
+    # B: מוצר (product name only)
+    ws_d[f"B{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("B")},$I{r}))'
+
+    # C: פרטים + הערות (fabric | version | size | notes — only non-empty parts)
+    ws_d[f"C{r}"] = (
+        f'=IF($I{r}="","",""'
+        f'&IF(INDEX({DI}!{R("G")},$I{r})<>"",INDEX({DI}!{R("G")},$I{r}),"")'
         f'&IF(INDEX({DI}!{R("C")},$I{r})<>""," | "&INDEX({DI}!{R("C")},$I{r}),"")'
-        f'&IF(INDEX({DI}!{R("I")},$I{r})<>""," ("&INDEX({DI}!{R("I")},$I{r})&")","")'
+        f'&IF(INDEX({DI}!{R("I")},$I{r})<>""," | "&INDEX({DI}!{R("I")},$I{r}),"")'
+        f'&IF(INDEX({DI}!{R("AC")},$I{r})<>""," | "&INDEX({DI}!{R("AC")},$I{r}),"")'
         f')'
     )
 
-    # C: הדפסים (combined A/B prints)
-    ws_d[f"C{r}"] = (
+    # D: הדפסים (combined A/B prints)
+    ws_d[f"D{r}"] = (
         f'=IF($I{r}="","",INDEX({DI}!{R("M")},$I{r})'
         f'&IF(INDEX({DI}!{R("N")},$I{r})<>""," / "&INDEX({DI}!{R("N")},$I{r}),"")'
         f')'
     )
 
-    # D: ויזואלי — כן if either side OK
-    ws_d[f"D{r}"] = (
+    # E: ויזואלי — כן if either side OK
+    ws_d[f"E{r}"] = (
         f'=IF($I{r}="","",IF(OR('
         f'INDEX({DI}!{R("O")},$I{r})="כן",'
         f'INDEX({DI}!{R("P")},$I{r})="כן"),"כן","לא"))'
     )
 
-    # E: תרמי — כן if either side OK
-    ws_d[f"E{r}"] = (
+    # F: תרמי — כן if either side OK
+    ws_d[f"F{r}"] = (
         f'=IF($I{r}="","",IF(OR('
         f'INDEX({DI}!{R("U")},$I{r})="כן",'
         f'INDEX({DI}!{R("V")},$I{r})="כן"),"כן","לא"))'
     )
 
-    # F: סטטוס
-    ws_d[f"F{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("X")},$I{r}))'
+    # G: סטטוס
+    ws_d[f"G{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("X")},$I{r}))'
 
-    # G: פרטי השאלה (only when status=מושאל: who | country | expected return)
-    ws_d[f"G{r}"] = (
+    # H: פרטי השאלה (only when status=מושאל: who | country | expected return)
+    ws_d[f"H{r}"] = (
         f'=IF($I{r}="","",IF(INDEX({DI}!{R("X")},$I{r})="מושאל",'
         f'INDEX({DI}!{R("Y")},$I{r})&" | "&INDEX({DI}!{R("Z")},$I{r})'
         f'&IF(INDEX({DI}!{R("AB")},$I{r})<>""," | "&TEXT(INDEX({DI}!{R("AB")},$I{r}),"DD/MM/YYYY"),"")'
         f',""))'
     )
 
-    # H: הערות
-    ws_d[f"H{r}"] = f'=IF($I{r}="","",INDEX({DI}!{R("AC")},$I{r}))'
-
     # Style all cells in the row (A-I)
     for c in range(1, 10):
         style_data(ws_d.cell(row=r, column=c), r - 21)
 
-# Detail conditional formatting — quality and status columns
+# Detail conditional formatting
 GREEN_FILL_D = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
 GREEN_FONT_D = Font(name="Calibri", bold=True, color="006100")
 ORANGE_FILL_D = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
 ORANGE_FONT_D = Font(name="Calibri", color="806000")
 
-# D column (visual OK): green when "כן"
-ws_d.conditional_formatting.add(
-    "D21:D320",
-    FormulaRule(formula=['D21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
-)
-# E column (thermal OK): green when "כן"
+# E column (visual OK): green when "כן"
 ws_d.conditional_formatting.add(
     "E21:E320",
     FormulaRule(formula=['E21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
 )
-# F column (status): color by status
+# F column (thermal OK): green when "כן"
 ws_d.conditional_formatting.add(
     "F21:F320",
-    FormulaRule(formula=['F21="מושאל"'], font=ORANGE_FONT_D, fill=ORANGE_FILL_D),
+    FormulaRule(formula=['F21="כן"'], font=GREEN_FONT_D, fill=GREEN_FILL_D),
+)
+# G column (status): color by status
+ws_d.conditional_formatting.add(
+    "G21:G320",
+    FormulaRule(formula=['G21="מושאל"'], font=ORANGE_FONT_D, fill=ORANGE_FILL_D),
 )
 ws_d.conditional_formatting.add(
-    "F21:F320",
-    FormulaRule(formula=['F21="בחדר תצוגה"'],
+    "G21:G320",
+    FormulaRule(formula=['G21="בחדר תצוגה"'],
                font=Font(name="Calibri", color="1F4E79"),
                fill=PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")),
 )
+
+# Yellow highlight: partial env match (only one side matches selected environment)
+YELLOW_FILL_D = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+ws_d.conditional_formatting.add(
+    "A21:H320",
+    FormulaRule(
+        formula=[
+            f'AND($A$2<>"הכל",$I21<>"",'
+            f'INDEX({DI}!{R("N")},$I21)<>"",'
+            f'(OR(INDEX({DI}!{R("Q")},$I21)=$A$2,INDEX({DI}!{R("R")},$I21)=$A$2))'
+            f'<>(OR(INDEX({DI}!{R("S")},$I21)=$A$2,INDEX({DI}!{R("T")},$I21)=$A$2)))'
+        ],
+        fill=YELLOW_FILL_D,
+    ),
+)
+
+# ---------------------------------------------------------------------------
+# Side Section: Products without print filter (columns K-P, rows 19-120)
+# ---------------------------------------------------------------------------
+SIDE_ROW_IDX = D_ROW_IDX
+SIDE_S = 21
+SIDE_E = 120
+
+ws_d.merge_cells("K19:P19")
+ws_d["K19"] = "סיכום ללא סינון הדפס"
+ws_d["K19"].font = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
+ws_d["K19"].fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+ws_d["K19"].border = THIN_BORDER
+
+ws_d["K20"] = f'=SUMPRODUCT({BF_NO_PRINT})'
+ws_d["K20"].font = Font(name="Calibri", bold=True, size=14, color="548235")
+ws_d["K20"].number_format = '0" פריטים (ללא סינון הדפס)"'
+ws_d["K20"].border = THIN_BORDER
+
+side_headers = ["מוצר", "הדפס A", "הדפס B", "סביבה A", "סביבה B", "ref"]
+for i, h in enumerate(side_headers):
+    cell = ws_d.cell(row=SIDE_S - 1, column=11 + i, value=h)
+    style_header(cell)
+ws_d.column_dimensions["P"].hidden = True
+
+for col, w in {"K": 22, "L": 16, "M": 16, "N": 14, "O": 14, "P": 10}.items():
+    ws_d.column_dimensions[col].width = w
+
+for r in range(SIDE_S, SIDE_E + 1):
+    n = r - SIDE_S + 1
+    ws_d[f"P{r}"] = ArrayFormula(
+        ref=f"P{r}",
+        text=f'=IFERROR(SMALL(IF({BF_NO_PRINT},{SIDE_ROW_IDX}),{n}),"")'
+    )
+    ws_d[f"K{r}"] = f'=IF($P{r}="","",INDEX({DI}!{R("B")},$P{r}))'
+    ws_d[f"L{r}"] = f'=IF($P{r}="","",INDEX({DI}!{R("M")},$P{r}))'
+    ws_d[f"M{r}"] = f'=IF($P{r}="","",INDEX({DI}!{R("N")},$P{r}))'
+    ws_d[f"N{r}"] = (
+        f'=IF($P{r}="","",IFERROR(INDEX({DI}!{R("Q")},$P{r}),"")'
+        f'&IF(INDEX({DI}!{R("R")},$P{r})<>""," / "&INDEX({DI}!{R("R")},$P{r}),"")'
+        f')'
+    )
+    ws_d[f"O{r}"] = (
+        f'=IF($P{r}="","",IFERROR(INDEX({DI}!{R("S")},$P{r}),"")'
+        f'&IF(INDEX({DI}!{R("T")},$P{r})<>""," / "&INDEX({DI}!{R("T")},$P{r}),"")'
+        f')'
+    )
+    for c in range(11, 17):
+        style_data(ws_d.cell(row=r, column=c), r - SIDE_S)
 
 # ---------------------------------------------------------------------------
 # Active Loans Detail (rows 322–423, always displayed)
@@ -969,9 +1048,9 @@ for i, h in enumerate(loan_d_headers):
     cell = ws_d.cell(row=LOAN_H, column=i + 1, value=h)
     style_header(cell)
 
-# Reuse column K as helper for the loans row range
-style_header(ws_d.cell(row=LOAN_H, column=11, value="loan_ref"))
-ws_d.column_dimensions["K"].hidden = True
+# Column Q as helper for the loans row range (K is used by side section)
+style_header(ws_d.cell(row=LOAN_H, column=17, value="loan_ref"))
+ws_d.column_dimensions["Q"].hidden = True
 
 # Loan filter: status = מושאל (always, no dashboard filter)
 LOAN_COND = f'({DI}!{R("D")}<>"")*({DI}!{R("X")}="מושאל")'
@@ -981,23 +1060,23 @@ loan_d_map = {"A": "D", "B": "B", "C": "C", "D": "Y", "E": "Z", "F": "AB"}
 for r in range(LOAN_S, LOAN_E + 1):
     n = r - LOAN_S + 1
 
-    # K: helper
-    ws_d[f"K{r}"] = ArrayFormula(
-        ref=f"K{r}",
+    # Q: helper
+    ws_d[f"Q{r}"] = ArrayFormula(
+        ref=f"Q{r}",
         text=f'=IFERROR(SMALL(IF({LOAN_COND},{D_ROW_IDX}),{n}),"")'
     )
 
     # A–F: pull data
     for dcol, icol in loan_d_map.items():
         ws_d[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
+            f'=IF($Q{r}="","",INDEX({DI}!{R(icol)},$Q{r}))'
         )
 
     # G: overdue indicator
     ws_d[f"G{r}"] = (
-        f'=IF($K{r}="","",IF(AND('
-        f'INDEX({DI}!{R("AB")},$K{r})<>"",'
-        f'INDEX({DI}!{R("AB")},$K{r})<TODAY()),'
+        f'=IF($Q{r}="","",IF(AND('
+        f'INDEX({DI}!{R("AB")},$Q{r})<>"",'
+        f'INDEX({DI}!{R("AB")},$Q{r})<TODAY()),'
         f'"באיחור!","תקין"))'
     )
 
@@ -1005,7 +1084,7 @@ for r in range(LOAN_S, LOAN_E + 1):
     ws_d[f"F{r}"].number_format = "DD/MM/YYYY"
 
     # Style
-    for c in range(1, 12):
+    for c in range(1, 8):
         style_data(ws_d.cell(row=r, column=c), r - LOAN_S)
 
 # Conditional formatting — overdue loans red highlight
@@ -1145,22 +1224,9 @@ for i, label in enumerate(tech_filter_labels):
 # Data validations — same base filters as regular dashboard
 for sqref, f1 in dv_defs:
     dv = DataValidation(type="list", formula1=f1, allow_blank=True)
+    dv.showErrorMessage = False
     dv.sqref = sqref
     ws_t.add_data_validation(dv)
-
-# D2 (version): dropdown with common versions, allows free text
-dv = DataValidation(type="list",
-    formula1='"הכל,V1,V2,V3,V4,V5,V6,V7,V8,V9,V10,Mk1,Mk2,Mk3"',
-    allow_blank=True)
-dv.showErrorMessage = False
-dv.sqref = "D2"
-ws_t.add_data_validation(dv)
-
-# F4 (print): dropdown with all print names + הכל, allows free text
-dv = DataValidation(type="list", formula1=PRINT_NAMES_CSV, allow_blank=True)
-dv.showErrorMessage = False
-dv.sqref = "F4"
-ws_t.add_data_validation(dv)
 
 # Novel filter (A6)
 dv = DataValidation(type="list", formula1='"הכל,כן,לא"', allow_blank=True)
@@ -1190,7 +1256,7 @@ BF_T = (f'{F_DATA}*({T_ENV})'
         f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
         f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
         f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
-        f'*{F_PRINT}')
+        f'*{F_PRINT}*{F_SIDES}')
 
 # MATCH expression: find inventory item in tech values sheet
 TMATCH = f'MATCH({DI}!{R("D")},{TV}!{R("A")},0)'
@@ -1221,6 +1287,7 @@ BF_TECH_NE = (f'{F_DATA}'
               f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
               f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
               f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
+              f'*{F_PRINT}*{F_SIDES}'
               + TF_ALL)
 
 # Inline env FALSE for wrong-print
@@ -1578,7 +1645,7 @@ ws_s.protection.enable()
 # --- Dashboard (ws_d) — unlock only filter cells ---
 # Filter cells: A2, B2, C2, D2, E2, F2, A4, B4, C4, D4, E4
 dash_unlock = ["A2", "B2", "C2", "D2", "E2", "F2",
-               "A4", "B4", "C4", "D4", "E4", "F4"]
+               "A4", "B4", "C4", "D4", "E4", "F4", "G4"]
 for ref in dash_unlock:
     ws_d[ref].protection = UNLOCKED
 ws_d.protection.sheet = True
@@ -1586,7 +1653,7 @@ ws_d.protection.password = "1998"
 ws_d.protection.enable()
 
 # --- TechOps Dashboard (ws_t) — unlock filter cells + tech filters ---
-tech_unlock = dash_unlock + ["A6", "B6", "C6", "D6", "E6", "F6", "G6"]
+tech_unlock = dash_unlock + ["A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6"]
 for ref in tech_unlock:
     ws_t[ref].protection = UNLOCKED
 ws_t.protection.sheet = True
@@ -1692,12 +1759,8 @@ dv = DataValidation(type="list",
     allow_blank=True)
 dv.sqref = "B2"
 ws_cmp.add_data_validation(dv)
-dv = DataValidation(type="list",
-    formula1='"הכל,Sahar,Inbar,SRV,Gabardine,Meron,Arber,IRR,'
-             'Polar,Nylon,Mesh,PVC,Other,RIPSTOP,RIPSTOP Double Layer,'
-             'Beti,MRG,3D,WaterProof Blackout Fabric,רשת רכב,'
-             'Stretch,Durable,SMT,LOKI Material,אחר"',
-    allow_blank=True)
+dv = DataValidation(type="list", formula1=FABRIC_NAMES_CSV, allow_blank=True)
+dv.showErrorMessage = False
 dv.sqref = "C2"
 ws_cmp.add_data_validation(dv)
 

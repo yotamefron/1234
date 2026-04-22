@@ -451,9 +451,9 @@ for r in FORMULA_ROWS:
     # T: Secondary environment for Side-B print
     ws[f"T{r}"] = f'=IFERROR(VLOOKUP(N{r},{PRINTS_RANGE},3,FALSE),"")'
 
-    # AE: env_match — TRUE if "הכל" selected or any of Q/R/S/T matches env
+    # AE: env_match — TRUE if "הכל"/empty selected or any of Q/R/S/T matches env
     ws[f"AE{r}"] = (
-        f"=IF('לוח בקרה'!$A$2=\"הכל\",TRUE,"
+        f"=IF(OR('לוח בקרה'!$A$2=\"הכל\",'לוח בקרה'!$A$2=\"\"),TRUE,"
         f"OR(Q{r}='לוח בקרה'!$A$2,R{r}='לוח בקרה'!$A$2,"
         f"S{r}='לוח בקרה'!$A$2,T{r}='לוח בקרה'!$A$2))"
     )
@@ -741,19 +741,19 @@ DI = "מלאי"                 # inventory sheet name
 
 
 def dflt(dash_cell, inv_col):
-    """Dashboard filter term: pass all when 'הכל', else exact match (numeric 1/0)."""
-    return f'(IF({dash_cell}="הכל",1,--({DI}!{R(inv_col)}={dash_cell})))'
+    """Dashboard filter: pass all when 'הכל' or empty, else exact match (1/0)."""
+    return f'(IF(OR({dash_cell}="הכל",{dash_cell}=""),1,--({DI}!{R(inv_col)}={dash_cell})))'
 
 
 F_DATA = f'(--({DI}!{R("D")}<>""))'
 F_ENV  = f'(--{DI}!{R("AE")})'
 
-# Print filter: match either print A (M) or print B (N)
-F_PRINT = (f'(IF($F$4="הכל",1,'
+# Print filter: match either print A (M) or print B (N); empty = pass all
+F_PRINT = (f'(IF(OR($F$4="הכל",$F$4=""),1,'
            f'--(({DI}!{R("M")}=$F$4)+({DI}!{R("N")}=$F$4)>0)))')
 
-# Sidedness filter: חד צדדי = no print B, דו צדדי = has print B
-F_SIDES = (f'(IF($G$4="הכל",1,'
+# Sidedness filter: חד צדדי = no print B, דו צדדי = has print B; empty = pass all
+F_SIDES = (f'(IF(OR($G$4="הכל",$G$4=""),1,'
            f'IF($G$4="דו צדדי",--({DI}!{R("N")}<>""),--({DI}!{R("N")}=""))))')
 
 # Build full base‐filter string  (data × env × 13 user filters)
@@ -772,13 +772,7 @@ BF_NE = (f'{F_DATA}'
          f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
          f'*{F_PRINT}*{F_SIDES}')
 
-# Base filter WITHOUT print (for side section)
-BF_NO_PRINT = (f'{F_DATA}*{F_ENV}'
-               f'*{dflt("$B$2","A")}*{dflt("$C$2","B")}*{dflt("$D$2","C")}'
-               f'*{dflt("$E$2","G")}*{dflt("$F$2","I")}'
-               f'*{dflt("$A$4","X")}*{dflt("$B$4","Z")}'
-               f'*{dflt("$C$4","O")}*{dflt("$D$4","U")}*{dflt("$E$4","K")}'
-               f'*{F_SIDES}')
+
 
 # Section title
 ws_d["A5"] = "סיכום"
@@ -795,21 +789,21 @@ metrics = [
     (9,  "כמות תקין תרמית בלבד",
      f'=SUMPRODUCT({BF}*(--{DI}!{R("AH")}))'),
     (10, "כמות במלאי",
-     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="במלאי"))'),
+     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="במלאי"))'),
     (11, "כמות מושאלים",
-     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="מושאל"))'),
+     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="מושאל"))'),
     (12, "כמות בחדר תצוגה",
-     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="בחדר תצוגה"))'),
+     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="בחדר תצוגה"))'),
     (13, "כמות בתיק הדגמה",
-     f'=SUMPRODUCT({BF}*({DI}!{R("X")}="בתיק הדגמה"))'),
+     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="בתיק הדגמה"))'),
     (14, "כמות עם פער בתכולה",
-     f'=SUMPRODUCT({BF}*({DI}!{R("AD")}="כן"))'),
+     f'=SUMPRODUCT({BF}*--({DI}!{R("AD")}="כן"))'),
     (15, "כמות גרסה מיוחדת - פיתוח",
-     f'=SUMPRODUCT({BF}*({DI}!{R("J")}="כן"))'),
+     f'=SUMPRODUCT({BF}*--({DI}!{R("J")}="כן"))'),
     (16, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
-     f'=IF($A$2="הכל","—",'
-     f'SUMPRODUCT({BF_NE}*({DI}!{R("AE")}=FALSE)'
-     f'*(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))'),
+     f'=IF(OR($A$2="הכל",$A$2=""),"—",'
+     f'SUMPRODUCT({BF_NE}*--({DI}!{R("AE")}=FALSE)'
+     f'*--(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))'),
 ]
 
 for row, label, formula in metrics:
@@ -1004,55 +998,6 @@ ws_d.conditional_formatting.add(
         fill=YELLOW_FILL_D,
     ),
 )
-
-# ---------------------------------------------------------------------------
-# Side Section: Products without print filter (columns K-P, rows 19-120)
-# ---------------------------------------------------------------------------
-SIDE_ROW_IDX = D_ROW_IDX
-SIDE_S = 21
-SIDE_E = 120
-
-ws_d.merge_cells("K19:P19")
-ws_d["K19"] = "סיכום ללא סינון הדפס"
-ws_d["K19"].font = Font(name="Calibri", bold=True, size=11, color="FFFFFF")
-ws_d["K19"].fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
-ws_d["K19"].border = THIN_BORDER
-
-ws_d["K20"] = f'=SUMPRODUCT({BF_NO_PRINT})'
-ws_d["K20"].font = Font(name="Calibri", bold=True, size=14, color="548235")
-ws_d["K20"].number_format = '0" פריטים (ללא סינון הדפס)"'
-ws_d["K20"].border = THIN_BORDER
-
-side_headers = ["מוצר", "הדפס A", "הדפס B", "סביבה A", "סביבה B", "ref"]
-for i, h in enumerate(side_headers):
-    cell = ws_d.cell(row=SIDE_S - 1, column=11 + i, value=h)
-    style_header(cell)
-ws_d.column_dimensions["P"].hidden = True
-
-for col, w in {"K": 22, "L": 16, "M": 16, "N": 14, "O": 14, "P": 10}.items():
-    ws_d.column_dimensions[col].width = w
-
-for r in range(SIDE_S, SIDE_E + 1):
-    n = r - SIDE_S + 1
-    ws_d[f"P{r}"] = ArrayFormula(
-        ref=f"P{r}",
-        text=f'=IFERROR(SMALL(IF({BF_NO_PRINT},{SIDE_ROW_IDX}),{n}),"")'
-    )
-    ws_d[f"K{r}"] = f'=IF($P{r}="","",INDEX({DI}!{R("B")},$P{r}))'
-    ws_d[f"L{r}"] = f'=IF($P{r}="","",INDEX({DI}!{R("M")},$P{r}))'
-    ws_d[f"M{r}"] = f'=IF($P{r}="","",INDEX({DI}!{R("N")},$P{r}))'
-    ws_d[f"N{r}"] = (
-        f'=IF($P{r}="","",IFERROR(INDEX({DI}!{R("Q")},$P{r}),"")'
-        f'&IF(INDEX({DI}!{R("R")},$P{r})<>""," / "&INDEX({DI}!{R("R")},$P{r}),"")'
-        f')'
-    )
-    ws_d[f"O{r}"] = (
-        f'=IF($P{r}="","",IFERROR(INDEX({DI}!{R("S")},$P{r}),"")'
-        f'&IF(INDEX({DI}!{R("T")},$P{r})<>""," / "&INDEX({DI}!{R("T")},$P{r}),"")'
-        f')'
-    )
-    for c in range(11, 17):
-        style_data(ws_d.cell(row=r, column=c), r - SIDE_S)
 
 # ---------------------------------------------------------------------------
 # Active Loans Detail (rows 322–423, always displayed)
@@ -1294,9 +1239,9 @@ for col, w in {"A": 48, "B": 22, "C": 20, "D": 18, "E": 18,
 TV = "'ערכים טכנולוגיים'"  # sheet name (quoted for formulas)
 
 # Inline env match (not dependent on regular dashboard AE helper)
-T_ENV = (f'IF($A$2="הכל",1,'
-         f'({DI}!{R("Q")}=$A$2)+({DI}!{R("R")}=$A$2)+'
-         f'({DI}!{R("S")}=$A$2)+({DI}!{R("T")}=$A$2)>0)')
+T_ENV = (f'IF(OR($A$2="הכל",$A$2=""),1,'
+         f'--(({DI}!{R("Q")}=$A$2)+({DI}!{R("R")}=$A$2)+'
+         f'({DI}!{R("S")}=$A$2)+({DI}!{R("T")}=$A$2)>0))')
 
 # Base filter with inline env (identical logic to regular, self-contained)
 BF_T = (f'{F_DATA}*({T_ENV})'
@@ -1310,7 +1255,7 @@ BF_T = (f'{F_DATA}*({T_ENV})'
 TMATCH = f'MATCH({DI}!{R("D")},{TV}!{R("A")},0)'
 
 # Tech filter conditions (appended to BF_T)
-TF_NOV = f'IF($A$6="הכל",1,IFERROR(--(INDEX({TV}!{R("M")},{TMATCH})=$A$6),0))'
+TF_NOV = f'IF(OR($A$6="הכל",$A$6=""),1,IFERROR(--(INDEX({TV}!{R("M")},{TMATCH})=$A$6),0))'
 TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!{R("N")},{TMATCH})>=$B$6),0))'
 TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!{R("N")},{TMATCH})<=$C$6),0))'
 TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!{R("O")},{TMATCH})>=$D$6),0))'
@@ -1339,9 +1284,9 @@ BF_TECH_NE = (f'{F_DATA}'
               + TF_ALL)
 
 # Inline env FALSE for wrong-print
-T_ENV_FALSE = (f'IF($A$2="הכל",FALSE,'
-               f'({DI}!{R("Q")}<>$A$2)*({DI}!{R("R")}<>$A$2)*'
-               f'({DI}!{R("S")}<>$A$2)*({DI}!{R("T")}<>$A$2))')
+T_ENV_FALSE = (f'IF(OR($A$2="הכל",$A$2=""),FALSE,'
+               f'--({DI}!{R("Q")}<>$A$2)*--({DI}!{R("R")}<>$A$2)*'
+               f'--({DI}!{R("S")}<>$A$2)*--({DI}!{R("T")}<>$A$2))')
 
 # ---------------------------------------------------------------------------
 # Summary Area (rows 8–20)
@@ -1359,19 +1304,19 @@ t_metrics = [
     (11, "כמות תקין תרמית בלבד",
      f'=SUMPRODUCT({BF_TECH}*{ANY_THERM_T}*(1-{ANY_VIS_T}))'),
     (12, "כמות במלאי",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="במלאי"))'),
+     f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="במלאי"))'),
     (13, "כמות מושאלים",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="מושאל"))'),
+     f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="מושאל"))'),
     (14, "כמות בחדר תצוגה",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="בחדר תצוגה"))'),
+     f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="בחדר תצוגה"))'),
     (15, "כמות בתיק הדגמה",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("X")}="בתיק הדגמה"))'),
+     f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="בתיק הדגמה"))'),
     (16, "כמות עם פער בתכולה",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("AD")}="כן"))'),
+     f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("AD")}="כן"))'),
     (17, "כמות גרסה מיוחדת - פיתוח",
-     f'=SUMPRODUCT({BF_TECH}*({DI}!{R("J")}="כן"))'),
+     f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("J")}="כן"))'),
     (18, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
-     f'=IF($A$2="הכל","—",'
+     f'=IF(OR($A$2="הכל",$A$2=""),"—",'
      f'SUMPRODUCT({BF_TECH_NE}*({T_ENV_FALSE})*{ANY_VIS_T}))'),
 ]
 

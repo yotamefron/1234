@@ -356,6 +356,8 @@ inv_headers = [
     "תקין_ויזואלי_בלבד",         # AG (helper)
     "תקין_תרמי_בלבד",            # AH (helper)
     "באיחור",                     # AI (helper)
+    "סינון_לוח_בקרה",             # AJ (helper - dashboard filter)
+    "סינון_ללא_סביבה",            # AK (helper - filter w/o env)
 ]
 
 for i, h in enumerate(inv_headers):
@@ -365,15 +367,15 @@ for i, h in enumerate(inv_headers):
 # Column widths
 widths = [16, 26, 12, 16, 12, 16, 14, 14, 10, 24, 14, 26,
           18, 18, 22, 22, 14, 18, 14, 18, 22, 22, 18, 12,
-          16, 12, 18, 18, 28, 16, 16, 16, 22, 22, 14]
+          16, 12, 18, 18, 28, 16, 16, 16, 22, 22, 14, 10, 10]
 for i, w in enumerate(widths):
     ws.column_dimensions[get_column_letter(i + 1)].width = w
 
 # Freeze header row
 ws.freeze_panes = "A2"
 
-# Hide helper columns AE–AI (columns 31–35)
-for c in range(31, 36):
+# Hide helper columns AE–AK (columns 31–37)
+for c in range(31, 38):
     ws.column_dimensions[get_column_letter(c)].hidden = True
 
 # --- Data Validations (rows 2–500) ---
@@ -434,6 +436,14 @@ SKU_C = f"'הגדרות'!$C${sku_start}:$C${SKU_PAD_END}"
 SKU_D = f"'הגדרות'!$D${sku_start}:$D${SKU_PAD_END}"
 
 FORMULA_ROWS = range(2, MR + 1)
+DB = "'לוח בקרה'"
+
+
+def d_flt_row(dash_cell, inv_col, r):
+    """Per-row filter term referencing a dashboard cell vs an inventory cell."""
+    return (f'IF(OR({DB}!{dash_cell}="הכל",{DB}!{dash_cell}=""),1,'
+            f'--({inv_col}{r}={DB}!{dash_cell}))')
+
 
 for r in FORMULA_ROWS:
     # E: SKU — INDEX/MATCH on concatenated product+fabric+version
@@ -482,6 +492,45 @@ for r in FORMULA_ROWS:
     # AI: overdue — loaned AND past expected return
     ws[f"AI{r}"] = (
         f'=AND(X{r}="מושאל",AB{r}<>"",AB{r}<TODAY())'
+    )
+
+    # AJ: dashboard combined filter (per-row scalar, not array)
+    ws[f"AJ{r}"] = (
+        f'=--(D{r}<>"")'
+        f'*--AE{r}'
+        f'*{d_flt_row("$B$2","A",r)}'
+        f'*{d_flt_row("$C$2","B",r)}'
+        f'*{d_flt_row("$D$2","C",r)}'
+        f'*{d_flt_row("$E$2","G",r)}'
+        f'*{d_flt_row("$F$2","I",r)}'
+        f'*{d_flt_row("$A$4","X",r)}'
+        f'*{d_flt_row("$B$4","Z",r)}'
+        f'*{d_flt_row("$C$4","O",r)}'
+        f'*{d_flt_row("$D$4","U",r)}'
+        f'*{d_flt_row("$E$4","K",r)}'
+        f'*IF(OR({DB}!$F$4="הכל",{DB}!$F$4=""),1,'
+        f'--((M{r}={DB}!$F$4)+(N{r}={DB}!$F$4)>0))'
+        f'*IF(OR({DB}!$G$4="הכל",{DB}!$G$4=""),1,'
+        f'IF({DB}!$G$4="דו צדדי",--(N{r}<>""),--(N{r}="")))'
+    )
+
+    # AK: same filter WITHOUT environment (for wrong-print metric)
+    ws[f"AK{r}"] = (
+        f'=--(D{r}<>"")'
+        f'*{d_flt_row("$B$2","A",r)}'
+        f'*{d_flt_row("$C$2","B",r)}'
+        f'*{d_flt_row("$D$2","C",r)}'
+        f'*{d_flt_row("$E$2","G",r)}'
+        f'*{d_flt_row("$F$2","I",r)}'
+        f'*{d_flt_row("$A$4","X",r)}'
+        f'*{d_flt_row("$B$4","Z",r)}'
+        f'*{d_flt_row("$C$4","O",r)}'
+        f'*{d_flt_row("$D$4","U",r)}'
+        f'*{d_flt_row("$E$4","K",r)}'
+        f'*IF(OR({DB}!$F$4="הכל",{DB}!$F$4=""),1,'
+        f'--((M{r}={DB}!$F$4)+(N{r}={DB}!$F$4)>0))'
+        f'*IF(OR({DB}!$G$4="הכל",{DB}!$G$4=""),1,'
+        f'IF({DB}!$G$4="דו צדדי",--(N{r}<>""),--(N{r}="")))'
     )
 
 # --- Conditional formatting: yellow Notes (AC) when גרסה סופית (K) = לא ---
@@ -774,6 +823,10 @@ BF_NE = (f'{F_DATA}'
 
 
 
+# Pre-computed filter columns on inventory sheet (per-row, not array)
+AJ_R = f"{DI}!$AJ$2:$AJ${MR}"   # full dashboard filter
+AK_R = f"{DI}!$AK$2:$AK${MR}"   # same without env
+
 # Section title
 ws_d["A5"] = "סיכום"
 ws_d["A5"].font = TITLE_FONT_D
@@ -781,28 +834,28 @@ ws_d["A5"].font = TITLE_FONT_D
 # Metric definitions: (row, label, formula)
 metrics = [
     (6,  'סה"כ פריטים תואמים',
-     f'=SUMPRODUCT({BF})'),
+     f'=SUMPRODUCT({AJ_R})'),
     (7,  "כמות תקין לגמרי",
-     f'=SUMPRODUCT({BF}*(--{DI}!{R("AF")}))'),
+     f'=SUMPRODUCT({AJ_R}*(--{DI}!{R("AF")}))'),
     (8,  "כמות תקין ויזואלית בלבד",
-     f'=SUMPRODUCT({BF}*(--{DI}!{R("AG")}))'),
+     f'=SUMPRODUCT({AJ_R}*(--{DI}!{R("AG")}))'),
     (9,  "כמות תקין תרמית בלבד",
-     f'=SUMPRODUCT({BF}*(--{DI}!{R("AH")}))'),
+     f'=SUMPRODUCT({AJ_R}*(--{DI}!{R("AH")}))'),
     (10, "כמות במלאי",
-     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="במלאי"))'),
+     f'=SUMPRODUCT({AJ_R}*--({DI}!{R("X")}="במלאי"))'),
     (11, "כמות מושאלים",
-     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="מושאל"))'),
+     f'=SUMPRODUCT({AJ_R}*--({DI}!{R("X")}="מושאל"))'),
     (12, "כמות בחדר תצוגה",
-     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="בחדר תצוגה"))'),
+     f'=SUMPRODUCT({AJ_R}*--({DI}!{R("X")}="בחדר תצוגה"))'),
     (13, "כמות בתיק הדגמה",
-     f'=SUMPRODUCT({BF}*--({DI}!{R("X")}="בתיק הדגמה"))'),
+     f'=SUMPRODUCT({AJ_R}*--({DI}!{R("X")}="בתיק הדגמה"))'),
     (14, "כמות עם פער בתכולה",
-     f'=SUMPRODUCT({BF}*--({DI}!{R("AD")}="כן"))'),
+     f'=SUMPRODUCT({AJ_R}*--({DI}!{R("AD")}="כן"))'),
     (15, "כמות גרסה מיוחדת - פיתוח",
-     f'=SUMPRODUCT({BF}*--({DI}!{R("J")}="כן"))'),
+     f'=SUMPRODUCT({AJ_R}*--({DI}!{R("J")}="כן"))'),
     (16, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
      f'=IF(OR($A$2="הכל",$A$2=""),"—",'
-     f'SUMPRODUCT({BF_NE}*--({DI}!{R("AE")}=FALSE)'
+     f'SUMPRODUCT({AK_R}*--({DI}!{R("AE")}=FALSE)'
      f'*--(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))'),
 ]
 
@@ -840,7 +893,7 @@ ws_d["D17"].fill = SUMMARY_BG
 ws_d["D17"].border = THIN_BORDER
 
 # --- Results counter in filter area H2:I2 ---
-ws_d["H2"] = f'=SUMPRODUCT({BF})'
+ws_d["H2"] = f'=SUMPRODUCT({AJ_R})'
 ws_d["H2"].font = Font(name="Calibri", bold=True, size=18, color="1F3864")
 ws_d["H2"].alignment = Alignment(horizontal="center", vertical="center")
 ws_d["H2"].fill = FILTER_VAL_FILL
@@ -901,7 +954,7 @@ for r in range(21, 321):
     # I: helper — row index of nth matching inventory row (CSE array formula)
     ws_d[f"I{r}"] = ArrayFormula(
         ref=f"I{r}",
-        text=f'=IFERROR(SMALL(IF({BF},{D_ROW_IDX}),{n}),"")'
+        text=f'=IFERROR(SMALL(IF({AJ_R},{D_ROW_IDX}),{n}),"")'
     )
 
     # A: מזהה
@@ -1609,7 +1662,7 @@ wb["לוח בקרה טכנו-מבצעי"].sheet_state = "hidden"
 # --- Inventory sheet (ws) ---
 # Lock all cells first, then unlock input columns
 for r in range(1, MR + 1):
-    for c in range(1, 36):
+    for c in range(1, 38):
         ws.cell(row=r, column=c).protection = LOCKED
 # Unlock input columns for data rows 2–500
 # Input cols: A-D (1-4), F-P (6-16), U-W (21-23), X-AD (24-30)

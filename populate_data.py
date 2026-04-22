@@ -51,7 +51,7 @@ INV_COL_MAP = {
 }
 
 # New inventory formula columns that must NOT be overwritten (1-based)
-INV_FORMULA_COLS = {5, 17, 18, 19, 20, 31, 32, 33, 34, 35}  # E, Q-T, AE-AI
+INV_FORMULA_COLS = {5, 17, 18, 19, 20, 31, 32, 33, 34, 35, 36, 37}  # E, Q-T, AE-AK
 
 # Old desired inventory (מלאי רצוי) column mapping: old_col -> new_col
 DI_COL_MAP = {

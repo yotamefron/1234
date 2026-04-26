@@ -185,6 +185,25 @@ def main():
     ws_di.protection.password = PASSWORD
     ws_di.protection.enable()
 
+    # --- Pre-fill Tech Values column A with inventory unique IDs ---
+    ws_tv = wb["ערכים טכנולוגיים"]
+    ws_tv.protection.sheet = False
+
+    tv_formula_cols = {2, 3, 4, 5, 9, 14, 15, 16, 17}  # B-E, I, N-Q (formula columns)
+    tv_id_count = 0
+    for i, row_data in enumerate(inv_data):
+        new_row = i + 2
+        uid = row_data.get(4)  # Column D = unique ID in inventory
+        if uid is not None:
+            ws_tv.cell(row=new_row, column=1, value=uid)  # A = item key
+            tv_id_count += 1
+
+    print(f"  Tech Values: pre-filled {tv_id_count} item IDs in column A")
+
+    ws_tv.protection.sheet = True
+    ws_tv.protection.password = PASSWORD
+    ws_tv.protection.enable()
+
     # -----------------------------------------------------------------
     # Step 4: Save the file
     # -----------------------------------------------------------------

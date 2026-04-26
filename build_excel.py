@@ -1147,15 +1147,15 @@ ws_tv = wb["ערכים טכנולוגיים"]
 ws_tv.sheet_view.rightToLeft = True
 
 tv_headers = [
-    "מזהה פריט",    # A — auto from inventory
-    "שם מוצר",       # B — auto from inventory
-    "גרסה",          # C — auto from inventory
-    "קו מוצר",       # D — auto from inventory
-    "הדפס צד A",     # E — auto from inventory
+    "מזהה פריט",    # A — manual (key to inventory, persists across reorder)
+    "שם מוצר",       # B — formula (MATCH on A)
+    "גרסה",          # C — formula
+    "קו מוצר",       # D — formula
+    "הדפס צד A",     # E — formula
     "MWIR צד A",     # F — manual numeric
     "LWIR צד A",     # G — manual numeric
     "NIR צד A",      # H — manual numeric
-    "הדפס צד B",     # I — auto from inventory
+    "הדפס צד B",     # I — formula
     "MWIR צד B",     # J — manual numeric
     "LWIR צד B",     # K — manual numeric
     "NIR צד B",      # L — manual numeric
@@ -1163,12 +1163,13 @@ tv_headers = [
     "ממוצע MWIR",    # N — formula
     "ממוצע LWIR",    # O — formula
     "ממוצע משולב",   # P — formula
+    "סינון_צדדים",   # Q — helper (cross-filter for TechOps dashboard)
 ]
 for i, h in enumerate(tv_headers):
     cell = ws_tv.cell(row=1, column=i + 1, value=h)
     style_header(cell)
 
-tv_widths = [16, 24, 12, 18, 18, 14, 14, 14, 18, 14, 14, 14, 10, 16, 16, 16]
+tv_widths = [16, 24, 12, 18, 18, 14, 14, 14, 18, 14, 14, 14, 10, 16, 16, 16, 10]
 for i, w in enumerate(tv_widths):
     ws_tv.column_dimensions[get_column_letter(i + 1)].width = w
 
@@ -1184,26 +1185,45 @@ for col in ("F", "G", "H", "J", "K", "L", "N", "O", "P"):
     for r in range(2, 501):
         ws_tv[f"{col}{r}"].number_format = "0.00"
 
-# Formulas for all rows (2–500): auto-populate from inventory + averages
+# Inventory ID range for MATCH (keyed by unique ID — survives inventory reorder)
+INV_ID = f"{DI}!$D$2:$D$500"
+T_SHEET = "'לוח בקרה טכנו-מבצעי'"
+
+# Hide helper column Q
+ws_tv.column_dimensions["Q"].hidden = True
+
 for r in range(2, 501):
-    # A: unique ID (auto from inventory)
-    ws_tv[f"A{r}"] = f'=IF({DI}!D{r}="","",{DI}!D{r})'
-    # B: product name
-    ws_tv[f"B{r}"] = f'=IF(A{r}="","",{DI}!B{r})'
-    # C: version
-    ws_tv[f"C{r}"] = f'=IF(A{r}="","",{DI}!C{r})'
-    # D: product line
-    ws_tv[f"D{r}"] = f'=IF(A{r}="","",{DI}!A{r})'
-    # E: print A
-    ws_tv[f"E{r}"] = f'=IF(A{r}="","",{DI}!M{r})'
-    # I: print B
-    ws_tv[f"I{r}"] = f'=IF(A{r}="","",{DI}!N{r})'
+    MR_TV = f"MATCH(A{r},{INV_ID},0)"
+    # B–E, I: lookup from inventory via MATCH on item ID
+    ws_tv[f"B{r}"] = f'=IFERROR(INDEX({DI}!$B$2:$B$500,{MR_TV}),"")'
+    ws_tv[f"C{r}"] = f'=IFERROR(INDEX({DI}!$C$2:$C$500,{MR_TV}),"")'
+    ws_tv[f"D{r}"] = f'=IFERROR(INDEX({DI}!$A$2:$A$500,{MR_TV}),"")'
+    ws_tv[f"E{r}"] = f'=IFERROR(INDEX({DI}!$M$2:$M$500,{MR_TV}),"")'
+    ws_tv[f"I{r}"] = f'=IFERROR(INDEX({DI}!$N$2:$N$500,{MR_TV}),"")'
     # N: avg MWIR (average both sides if B exists, else A only)
     ws_tv[f"N{r}"] = f'=IF(F{r}="","",IF(J{r}<>"",AVERAGE(F{r},J{r}),F{r}))'
     # O: avg LWIR
     ws_tv[f"O{r}"] = f'=IF(G{r}="","",IF(K{r}<>"",AVERAGE(G{r},K{r}),G{r}))'
     # P: combined avg
     ws_tv[f"P{r}"] = f'=IF(OR(N{r}="",O{r}=""),"",AVERAGE(N{r},O{r}))'
+
+    # Q: side-specific cross-filter helper (references TechOps dashboard row 8)
+    # (SideA matches Profile1 AND SideB matches Profile2) OR vice versa
+    def _sm(mw, lw, mn_mw, mx_mw, mn_lw, mx_lw):
+        return (f'IF({mn_mw}="",1,--({mw}>={mn_mw}))'
+                f'*IF({mx_mw}="",1,--({mw}<={mx_mw}))'
+                f'*IF({mn_lw}="",1,--({lw}>={mn_lw}))'
+                f'*IF({mx_lw}="",1,--({lw}<={mx_lw}))')
+    TS = T_SHEET
+    s1a = _sm(f"F{r}", f"G{r}", f"{TS}!$A$8", f"{TS}!$B$8", f"{TS}!$C$8", f"{TS}!$D$8")
+    s1b = _sm(f"J{r}", f"K{r}", f"{TS}!$A$8", f"{TS}!$B$8", f"{TS}!$C$8", f"{TS}!$D$8")
+    s2a = _sm(f"F{r}", f"G{r}", f"{TS}!$E$8", f"{TS}!$F$8", f"{TS}!$G$8", f"{TS}!$H$8")
+    s2b = _sm(f"J{r}", f"K{r}", f"{TS}!$E$8", f"{TS}!$F$8", f"{TS}!$G$8", f"{TS}!$H$8")
+    ws_tv[f"Q{r}"] = (
+        f'=IF(AND({TS}!$A$8="",{TS}!$B$8="",{TS}!$C$8="",{TS}!$D$8="",'
+        f'{TS}!$E$8="",{TS}!$F$8="",{TS}!$G$8="",{TS}!$H$8=""),1,'
+        f'IF(OR({s1a}*{s2b}>0,{s1b}*{s2a}>0),1,0))'
+    )
 
 
 # ===========================================================================
@@ -1239,10 +1259,10 @@ for i, label in enumerate(filter_r2):
     val.alignment = CELL_ALIGN
     val.border = THIN_BORDER
 
-# Row 5–6: tech-specific filters
+# Row 5–6: tech-specific filters (any side matches)
 tech_filter_labels = [
     "נובל", "MWIR מינ׳", "MWIR מקס׳",
-    "LWIR מינ׳", "LWIR מקס׳", "משולב מינ׳", "משולב מקס׳",
+    "LWIR מינ׳", "LWIR מקס׳", "NIR מינ׳", "NIR מקס׳",
 ]
 for i, label in enumerate(tech_filter_labels):
     c = i + 1
@@ -1253,6 +1273,26 @@ for i, label in enumerate(tech_filter_labels):
     cell.border = THIN_BORDER
     val = ws_t.cell(row=6, column=c)
     val.value = "הכל" if i == 0 else None
+    val.fill = FILTER_VAL_FILL
+    val.alignment = CELL_ALIGN
+    val.border = THIN_BORDER
+
+# Row 7–8: side-specific cross-filter (sides are interchangeable)
+SIDE_FILTER_BG = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+side_filter_labels = [
+    "צד 1: MWIR מינ׳", "צד 1: MWIR מקס׳",
+    "צד 1: LWIR מינ׳", "צד 1: LWIR מקס׳",
+    "צד 2: MWIR מינ׳", "צד 2: MWIR מקס׳",
+    "צד 2: LWIR מינ׳", "צד 2: LWIR מקס׳",
+]
+for i, label in enumerate(side_filter_labels):
+    c = i + 1
+    cell = ws_t.cell(row=7, column=c, value=label)
+    cell.font = FILTER_FONT
+    cell.fill = SIDE_FILTER_BG
+    cell.alignment = HEADER_ALIGN
+    cell.border = THIN_BORDER
+    val = ws_t.cell(row=8, column=c)
     val.fill = FILTER_VAL_FILL
     val.alignment = CELL_ALIGN
     val.border = THIN_BORDER
@@ -1311,17 +1351,25 @@ BF_T = (f'{F_DATA}*({T_ENV})'
 # MATCH expression: find inventory item in tech values sheet
 TMATCH = f'MATCH({DI}!{R("D")},{TV}!{R("A")},0)'
 
-# Tech filter conditions (appended to BF_T)
+# Tech filter conditions — per-side: show if at least ONE side matches
 TF_NOV = f'IF(OR($A$6="הכל",$A$6=""),1,IFERROR(--(INDEX({TV}!{R("M")},{TMATCH})=$A$6),0))'
-TF_MW1 = f'IF($B$6="",1,IFERROR(--(INDEX({TV}!{R("N")},{TMATCH})>=$B$6),0))'
-TF_MW2 = f'IF($C$6="",1,IFERROR(--(INDEX({TV}!{R("N")},{TMATCH})<=$C$6),0))'
-TF_LW1 = f'IF($D$6="",1,IFERROR(--(INDEX({TV}!{R("O")},{TMATCH})>=$D$6),0))'
-TF_LW2 = f'IF($E$6="",1,IFERROR(--(INDEX({TV}!{R("O")},{TMATCH})<=$E$6),0))'
-TF_CB1 = f'IF($F$6="",1,IFERROR(--(INDEX({TV}!{R("P")},{TMATCH})>=$F$6),0))'
-TF_CB2 = f'IF($G$6="",1,IFERROR(--(INDEX({TV}!{R("P")},{TMATCH})<=$G$6),0))'
+TF_MW1 = (f'IF($B$6="",1,IFERROR(--((INDEX({TV}!{R("F")},{TMATCH})>=$B$6)'
+          f'+(INDEX({TV}!{R("J")},{TMATCH})>=$B$6)>0),0))')
+TF_MW2 = (f'IF($C$6="",1,IFERROR(--((INDEX({TV}!{R("F")},{TMATCH})<=$C$6)'
+          f'+(INDEX({TV}!{R("J")},{TMATCH})<=$C$6)>0),0))')
+TF_LW1 = (f'IF($D$6="",1,IFERROR(--((INDEX({TV}!{R("G")},{TMATCH})>=$D$6)'
+          f'+(INDEX({TV}!{R("K")},{TMATCH})>=$D$6)>0),0))')
+TF_LW2 = (f'IF($E$6="",1,IFERROR(--((INDEX({TV}!{R("G")},{TMATCH})<=$E$6)'
+          f'+(INDEX({TV}!{R("K")},{TMATCH})<=$E$6)>0),0))')
+TF_NIR1 = (f'IF($F$6="",1,IFERROR(--((INDEX({TV}!{R("H")},{TMATCH})>=$F$6)'
+           f'+(INDEX({TV}!{R("L")},{TMATCH})>=$F$6)>0),0))')
+TF_NIR2 = (f'IF($G$6="",1,IFERROR(--((INDEX({TV}!{R("H")},{TMATCH})<=$G$6)'
+           f'+(INDEX({TV}!{R("L")},{TMATCH})<=$G$6)>0),0))')
+# Cross-filter: pre-computed per-row in TV column Q (interchangeable sides)
+TF_CROSS = f'IFERROR(INDEX({TV}!{R("Q")},{TMATCH}),1)'
 
 TF_ALL = (f'*({TF_NOV})*({TF_MW1})*({TF_MW2})'
-          f'*({TF_LW1})*({TF_LW2})*({TF_CB1})*({TF_CB2})')
+          f'*({TF_LW1})*({TF_LW2})*({TF_NIR1})*({TF_NIR2})*({TF_CROSS})')
 
 BF_TECH = BF_T + TF_ALL  # full techops filter
 
@@ -1346,33 +1394,33 @@ T_ENV_FALSE = (f'IF(OR($A$2="הכל",$A$2=""),FALSE,'
                f'--({DI}!{R("S")}<>$A$2)*--({DI}!{R("T")}<>$A$2))')
 
 # ---------------------------------------------------------------------------
-# Summary Area (rows 8–20)
+# Summary Area (rows 10–22)
 # ---------------------------------------------------------------------------
-ws_t["A7"] = "סיכום"
-ws_t["A7"].font = TITLE_FONT_D
+ws_t["A9"] = "סיכום"
+ws_t["A9"].font = TITLE_FONT_D
 
 t_metrics = [
-    (8,  'סה"כ פריטים תואמים',
+    (10,  'סה"כ פריטים תואמים',
      f'=SUMPRODUCT({BF_TECH})'),
-    (9,  "כמות תקין לגמרי",
+    (11,  "כמות תקין לגמרי",
      f'=SUMPRODUCT({BF_TECH}*{FULLY_OK_T})'),
-    (10, "כמות תקין ויזואלית בלבד",
+    (12, "כמות תקין ויזואלית בלבד",
      f'=SUMPRODUCT({BF_TECH}*{ANY_VIS_T}*(1-{FULLY_OK_T}))'),
-    (11, "כמות תקין תרמית בלבד",
+    (13, "כמות תקין תרמית בלבד",
      f'=SUMPRODUCT({BF_TECH}*{ANY_THERM_T}*(1-{ANY_VIS_T}))'),
-    (12, "כמות במלאי",
+    (14, "כמות במלאי",
      f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="במלאי"))'),
-    (13, "כמות מושאלים",
+    (15, "כמות מושאלים",
      f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="מושאל"))'),
-    (14, "כמות בחדר תצוגה",
+    (16, "כמות בחדר תצוגה",
      f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="בחדר תצוגה"))'),
-    (15, "כמות בתיק הדגמה",
+    (17, "כמות בתיק הדגמה",
      f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("X")}="בתיק הדגמה"))'),
-    (16, "כמות עם פער בתכולה",
+    (18, "כמות עם פער בתכולה",
      f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("AD")}="כן"))'),
-    (17, "כמות גרסה מיוחדת - פיתוח",
+    (19, "כמות גרסה מיוחדת - פיתוח",
      f'=SUMPRODUCT({BF_TECH}*--({DI}!{R("J")}="כן"))'),
-    (18, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
+    (20, "תקינים ויזואלית אך הדפס לא מתאים לסביבה",
      f'=IF(OR($A$2="הכל",$A$2=""),"—",'
      f'SUMPRODUCT({BF_TECH_NE}*({T_ENV_FALSE})*{ANY_VIS_T}))'),
 ]
@@ -1392,29 +1440,29 @@ for row, label, formula in t_metrics:
     cv.fill = SUMMARY_BG
     cv.border = THIN_BORDER
 
-# Row 19: print detail
-ws_t.merge_cells("A19:C19")
-ws_t["A19"].value = "פירוט הדפסים שאינם מתאימים"
-ws_t["A19"].font = METRIC_LABEL_FONT
-ws_t["A19"].alignment = CELL_ALIGN
-ws_t["A19"].fill = SUMMARY_BG
-ws_t["A19"].border = THIN_BORDER
-ws_t.merge_cells("D19:J19")
-ws_t["D19"] = (
+# Row 21: print detail
+ws_t.merge_cells("A21:C21")
+ws_t["A21"].value = "פירוט הדפסים שאינם מתאימים"
+ws_t["A21"].font = METRIC_LABEL_FONT
+ws_t["A21"].alignment = CELL_ALIGN
+ws_t["A21"].fill = SUMMARY_BG
+ws_t["A21"].border = THIN_BORDER
+ws_t.merge_cells("D21:J21")
+ws_t["D21"] = (
     f'=IF($A$2="הכל","—",IFERROR(TEXTJOIN(", ",TRUE,UNIQUE(FILTER('
     f'{DI}!{R("M")},({DI}!{R("D")}<>"")*({T_ENV_FALSE})'
     f'*(({DI}!{R("O")}="כן")+({DI}!{R("P")}="כן")>0)))),""))'
 )
-ws_t["D19"].font = Font(name="Calibri", size=10, color="1F3864")
-ws_t["D19"].alignment = CELL_ALIGN
-ws_t["D19"].fill = SUMMARY_BG
-ws_t["D19"].border = THIN_BORDER
+ws_t["D21"].font = Font(name="Calibri", size=10, color="1F3864")
+ws_t["D21"].alignment = CELL_ALIGN
+ws_t["D21"].fill = SUMMARY_BG
+ws_t["D21"].border = THIN_BORDER
 
 # ---------------------------------------------------------------------------
-# TechOps Filtered Product Detail (rows 22–321)
+# TechOps Filtered Product Detail (rows 24–325)
 # ---------------------------------------------------------------------------
-ws_t["A21"] = "פירוט פריטים מסוננים"
-ws_t["A21"].font = TITLE_FONT_D
+ws_t["A23"] = "פירוט פריטים מסוננים"
+ws_t["A23"].font = TITLE_FONT_D
 
 t_det_headers = [
     "מזהה", "שם מוצר", "גרסה", "סוג בד", "הדפס A", "הדפס B",
@@ -1425,14 +1473,14 @@ t_det_headers = [
     "נובל", "ממוצע צד א", "ממוצע צד ב", "NIR צד א", "NIR צד ב",
 ]
 for i, h in enumerate(t_det_headers):
-    cell = ws_t.cell(row=22, column=i + 1, value=h)
+    cell = ws_t.cell(row=24, column=i + 1, value=h)
     style_header(cell)
 
 # K (col 11) = hidden helper
 ws_t.column_dimensions["K"].hidden = True
 
 # Freeze below filter area only (so summary scrolls with detail)
-ws_t.freeze_panes = "A7"
+ws_t.freeze_panes = "A9"
 
 # Detail column → inventory column mapping (A–J same as regular)
 t_det_map = {
@@ -1442,8 +1490,8 @@ t_det_map = {
 
 T_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
 
-for r in range(23, 323):
-    n = r - 22  # nth match
+for r in range(25, 325):
+    n = r - 24  # nth match
 
     # K: helper — row index of nth matching inventory row
     ws_t[f"K{r}"] = ArrayFormula(
@@ -1489,15 +1537,15 @@ for r in range(23, 323):
 
     # Style all cells
     for c in range(1, 17):
-        style_data(ws_t.cell(row=r, column=c), r - 23)
+        style_data(ws_t.cell(row=r, column=c), r - 25)
 
 # ---------------------------------------------------------------------------
-# TechOps Active Loans Detail (rows 325–424)
+# TechOps Active Loans Detail (rows 327–428)
 # ---------------------------------------------------------------------------
-T_LN_T = 324   # title
-T_LN_H = 325   # header
-T_LN_S = 326   # first data
-T_LN_E = 425   # last data
+T_LN_T = 326   # title
+T_LN_H = 327   # header
+T_LN_S = 328   # first data
+T_LN_E = 427   # last data
 
 ws_t[f"A{T_LN_T}"] = "השאלות פעילות"
 ws_t[f"A{T_LN_T}"].font = TITLE_FONT_D
@@ -1715,8 +1763,9 @@ ws_d.protection.sheet = True
 ws_d.protection.password = "1998"
 ws_d.protection.enable()
 
-# --- TechOps Dashboard (ws_t) — unlock filter cells + tech filters ---
-tech_unlock = dash_unlock + ["A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6"]
+# --- TechOps Dashboard (ws_t) — unlock filter cells + tech filters + side filters ---
+tech_unlock = dash_unlock + ["A6", "B6", "C6", "D6", "E6", "F6", "G6", "H6",
+                             "A8", "B8", "C8", "D8", "E8", "F8", "G8", "H8"]
 for ref in tech_unlock:
     ws_t[ref].protection = UNLOCKED
 ws_t.protection.sheet = True
@@ -1730,8 +1779,8 @@ ws_l.protection.sheet = True
 ws_l.protection.password = "1998"
 ws_l.protection.enable()
 
-# --- Tech Values (ws_tv) — unlock input columns F, G, H, J, K, L, M ---
-tv_input_cols = [6, 7, 8, 10, 11, 12, 13]  # F, G, H, J, K, L, M (A is auto-populated)
+# --- Tech Values (ws_tv) — unlock input columns A, F, G, H, J, K, L, M ---
+tv_input_cols = [1, 6, 7, 8, 10, 11, 12, 13]  # A (item key), F, G, H, J, K, L, M
 for r in range(2, 501):
     for c in tv_input_cols:
         ws_tv.cell(row=r, column=c).protection = UNLOCKED

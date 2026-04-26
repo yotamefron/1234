@@ -63,7 +63,7 @@ def style_data(cell, row_idx):
     cell.border = THIN_BORDER
 
 
-def write_table(ws, start_row, start_col, headers, data_rows, range_name):
+def write_table(ws, start_row, start_col, headers, data_rows, range_name, padding=0):
     """Write a styled table and define a named range. Returns (next_row, data_start, data_end)."""
     num_cols = len(headers)
     for c, header in enumerate(headers):
@@ -73,6 +73,11 @@ def write_table(ws, start_row, start_col, headers, data_rows, range_name):
         for c, value in enumerate(row_data):
             cell = ws.cell(row=start_row + 1 + r, column=start_col + c, value=value)
             style_data(cell, r)
+    for p in range(padding):
+        for c in range(num_cols):
+            cell = ws.cell(row=start_row + 1 + len(data_rows) + p, column=start_col + c)
+            style_data(cell, len(data_rows) + p)
+    total_rows = len(data_rows) + padding
     for c in range(num_cols):
         col_letter = get_column_letter(start_col + c)
         max_len = len(str(headers[c]))
@@ -82,14 +87,14 @@ def write_table(ws, start_row, start_col, headers, data_rows, range_name):
         ws.column_dimensions[col_letter].width = max(max_len * 1.5, 14)
 
     data_start = start_row + 1
-    data_end = start_row + max(len(data_rows), 1)
+    data_end = start_row + max(total_rows, 1)
     first_col = get_column_letter(start_col)
     last_col = get_column_letter(start_col + num_cols - 1)
     ref = f"'הגדרות'!${first_col}${data_start}:${last_col}${data_end}"
     dn = DefinedName(range_name, attr_text=ref)
     wb.defined_names.add(dn)
 
-    next_row = start_row + 1 + len(data_rows) + 2
+    next_row = start_row + 1 + total_rows + 2
     return next_row, data_start, data_end
 
 
@@ -115,7 +120,7 @@ cr = 1
 # TABLE 1 — Environments
 cr, _, _ = write_table(ws_s, cr, 1, ["סביבה"],
     [["מדברי"], ["מיוער"], ["שלג"], ["ימי"], ["מבולדר/שטח בנוי"], ["אחר"]],
-    "סביבות")
+    "סביבות", padding=5)
 
 # TABLE 2 — Prints
 prints_data = [
@@ -138,7 +143,8 @@ prints_data = [
     ["Kestrel (אמריקאי)", "מיוער", None, None],
 ]
 cr, pr_start, pr_end = write_table(ws_s, cr, 1,
-    ["הדפס", "סביבה ראשית", "סביבה משנית", "תמונה"], prints_data, "הדפסים")
+    ["הדפס", "סביבה ראשית", "סביבה משנית", "תמונה"], prints_data, "הדפסים",
+    padding=10)
 
 # Single-column named range for print name dropdowns
 add_named("שמות_הדפסים", f"'הגדרות'!$A${pr_start}:$A${pr_end}")
@@ -150,7 +156,7 @@ PRINT_NAMES_CSV = '"הכל,' + ",".join(p[0] for p in prints_data) + '"'
 cr, _, _ = write_table(ws_s, cr, 1, ["קו מוצר"],
     [["OverGarment"], ["Hide Site"], ["Platform Hide Site"], ["Uniform"],
      ["Blankets"], ["Urban"], ["Platform On-The-Move"], ["Accessories"]],
-    "קווי_מוצר")
+    "קווי_מוצר", padding=5)
 
 # TABLE 4 — Products
 t4_data = [
@@ -207,7 +213,7 @@ t4_data = [
     ["Hide Site", "Vehicle hide site 9*13", ""],
 ]
 cr, prod_start, prod_end = write_table(ws_s, cr, 1,
-    ["קו מוצר", "שם מוצר", "גרסאות זמינות"], t4_data, "מוצרים")
+    ["קו מוצר", "שם מוצר", "גרסאות זמינות"], t4_data, "מוצרים", padding=20)
 
 # Per-product-line named ranges for dependent dropdown (INDIRECT)
 def sanitize(name):
@@ -230,18 +236,20 @@ cr, _, _ = write_table(ws_s, cr, 1, ["סוג בד"],
      ["RIPSTOP"], ["RIPSTOP Double Layer"], ["Beti"], ["MRG"], ["3D"],
      ["WaterProof Blackout Fabric"], ["רשת רכב"], ["Stretch"],
      ["Durable"], ["SMT"], ["LOKI Material"], ["אחר"]],
-    "סוגי_בד")
+    "סוגי_בד", padding=10)
 
 # TABLE 6 — Statuses
 cr, _, _ = write_table(ws_s, cr, 1, ["סטטוס"],
-    [["במלאי"], ["מושאל"], ["בחדר תצוגה"], ["בתיק הדגמה"]], "סטטוסים")
+    [["במלאי"], ["מושאל"], ["בחדר תצוגה"], ["בתיק הדגמה"]], "סטטוסים",
+    padding=3)
 
 # TABLE 7 — Yes/No
 cr, _, _ = write_table(ws_s, cr, 1, ["ערך"], [["כן"], ["לא"]], "כן_לא")
 
 # TABLE 8 — Sizes
 cr, _, _ = write_table(ws_s, cr, 1, ["מידה"],
-    [["XS"], ["S"], ["M"], ["L"], ["XL"], ["XXL"], ["XXXL"], ["One Size"], ["N/A"]], "מידות")
+    [["XS"], ["S"], ["M"], ["L"], ["XL"], ["XXL"], ["XXXL"], ["One Size"], ["N/A"]], "מידות",
+    padding=5)
 
 # TABLE 9 — SKU mapping
 sku_data = [
@@ -279,7 +287,7 @@ sku_data = [
     ["3D Survival Blanket", "Mesh", "V1", "9029-00"],
 ]
 cr, sku_start, sku_end = write_table(ws_s, cr, 1,
-    ["מוצר", "סוג בד", "גרסה", 'מק"ט'], sku_data, "מקטים")
+    ["מוצר", "סוג בד", "גרסה", 'מק"ט'], sku_data, "מקטים", padding=20)
 
 # TABLE 10 — Versions (extracted from SKU data)
 _sku_versions = sorted(v for v in set(row[2] for row in sku_data) if v)
@@ -288,20 +296,20 @@ _extra_versions = ["ARBEL", "ELITE", "Eclipse", "LTD", "Less is More",
                    "one side", "אדם, דגם-2", "ארוכה", "ישראלי"]
 version_values = sorted(set(_sku_versions + _extra_versions))
 cr, ver_start, ver_end = write_table(ws_s, cr, 1, ["גרסה"],
-    [[v] for v in version_values], "גרסאות")
+    [[v] for v in version_values], "גרסאות", padding=10)
 
 # TABLE 11 — All product names for dashboard filter dropdown
 all_product_names = sorted(set(row[1] for row in t4_data))
 all_products_with_all = [["הכל"]] + [[n] for n in all_product_names]
 cr, ap_start, ap_end = write_table(ws_s, cr, 1, ["שם מוצר (סינון)"],
-    all_products_with_all, "כל_שמות_המוצרים")
+    all_products_with_all, "כל_שמות_המוצרים", padding=15)
 
 # TABLE 12 — Countries for dashboard filter dropdown
 country_data = [["הכל"], ["ישראל"], ['ארה"ב'], ["גרמניה"], ["צרפת"],
                 ["בריטניה"], ["הודו"], ["קנדה"], ["אוסטרליה"],
                 ["אחר"]]
 cr, cn_start, cn_end = write_table(ws_s, cr, 1, ["מדינה"],
-    country_data, "מדינות_סינון")
+    country_data, "מדינות_סינון", padding=5)
 
 # Build CSV strings for filter dropdowns (with הכל prefix)
 FABRIC_NAMES_CSV = '"הכל,' + ",".join(row[0] for row in [
@@ -1139,15 +1147,15 @@ ws_tv = wb["ערכים טכנולוגיים"]
 ws_tv.sheet_view.rightToLeft = True
 
 tv_headers = [
-    "מזהה פריט",    # A — manual (key to inventory)
-    "שם מוצר",       # B — formula from inventory
-    "גרסה",          # C — formula
-    "קו מוצר",       # D — formula
-    "הדפס צד A",     # E — formula
+    "מזהה פריט",    # A — auto from inventory
+    "שם מוצר",       # B — auto from inventory
+    "גרסה",          # C — auto from inventory
+    "קו מוצר",       # D — auto from inventory
+    "הדפס צד A",     # E — auto from inventory
     "MWIR צד A",     # F — manual numeric
     "LWIR צד A",     # G — manual numeric
     "NIR צד A",      # H — manual numeric
-    "הדפס צד B",     # I — formula
+    "הדפס צד B",     # I — auto from inventory
     "MWIR צד B",     # J — manual numeric
     "LWIR צד B",     # K — manual numeric
     "NIR צד B",      # L — manual numeric
@@ -1176,30 +1184,26 @@ for col in ("F", "G", "H", "J", "K", "L", "N", "O", "P"):
     for r in range(2, 501):
         ws_tv[f"{col}{r}"].number_format = "0.00"
 
-# Inventory ID range for MATCH
-INV_ID = f"{DI}!$D$2:$D$500"
-
-# Formulas for all rows (2–500): lookup from inventory + averages
+# Formulas for all rows (2–500): auto-populate from inventory + averages
 for r in range(2, 501):
-    MR_TV = f"MATCH(A{r},{INV_ID},0)"
+    # A: unique ID (auto from inventory)
+    ws_tv[f"A{r}"] = f'=IF({DI}!D{r}="","",{DI}!D{r})'
     # B: product name
-    ws_tv[f"B{r}"] = f'=IFERROR(INDEX({DI}!$B$2:$B$500,{MR_TV}),"")'
+    ws_tv[f"B{r}"] = f'=IF(A{r}="","",{DI}!B{r})'
     # C: version
-    ws_tv[f"C{r}"] = f'=IFERROR(INDEX({DI}!$C$2:$C$500,{MR_TV}),"")'
+    ws_tv[f"C{r}"] = f'=IF(A{r}="","",{DI}!C{r})'
     # D: product line
-    ws_tv[f"D{r}"] = f'=IFERROR(INDEX({DI}!$A$2:$A$500,{MR_TV}),"")'
+    ws_tv[f"D{r}"] = f'=IF(A{r}="","",{DI}!A{r})'
     # E: print A
-    ws_tv[f"E{r}"] = f'=IFERROR(INDEX({DI}!$M$2:$M$500,{MR_TV}),"")'
+    ws_tv[f"E{r}"] = f'=IF(A{r}="","",{DI}!M{r})'
     # I: print B
-    ws_tv[f"I{r}"] = f'=IFERROR(INDEX({DI}!$N$2:$N$500,{MR_TV}),"")'
+    ws_tv[f"I{r}"] = f'=IF(A{r}="","",{DI}!N{r})'
     # N: avg MWIR (average both sides if B exists, else A only)
     ws_tv[f"N{r}"] = f'=IF(F{r}="","",IF(J{r}<>"",AVERAGE(F{r},J{r}),F{r}))'
     # O: avg LWIR
     ws_tv[f"O{r}"] = f'=IF(G{r}="","",IF(K{r}<>"",AVERAGE(G{r},K{r}),G{r}))'
     # P: combined avg
     ws_tv[f"P{r}"] = f'=IF(OR(N{r}="",O{r}=""),"",AVERAGE(N{r},O{r}))'
-
-# No sample data — tech values starts empty
 
 
 # ===========================================================================
@@ -1282,8 +1286,8 @@ ws_t.add_data_validation(dv)
 # Column widths
 for col, w in {"A": 48, "B": 22, "C": 20, "D": 18, "E": 18,
                "F": 14, "G": 14, "H": 14, "I": 14, "J": 28,
-               "K": 10, "L": 10, "M": 14, "N": 14,
-               "O": 14, "P": 14, "Q": 16}.items():
+               "K": 10, "L": 10, "M": 16, "N": 16,
+               "O": 14, "P": 14}.items():
     ws_t.column_dimensions[col].width = w
 
 # ---------------------------------------------------------------------------
@@ -1418,7 +1422,7 @@ t_det_headers = [
     # hidden helper
     "row_ref",
     # tech columns
-    "נובל", "MWIR A", "MWIR B", "LWIR A", "LWIR B", "ממוצע משולב",
+    "נובל", "ממוצע צד א", "ממוצע צד ב", "NIR צד א", "NIR צד ב",
 ]
 for i, h in enumerate(t_det_headers):
     cell = ws_t.cell(row=22, column=i + 1, value=h)
@@ -1427,23 +1431,13 @@ for i, h in enumerate(t_det_headers):
 # K (col 11) = hidden helper
 ws_t.column_dimensions["K"].hidden = True
 
-# Freeze below detail headers
-ws_t.freeze_panes = "A23"
+# Freeze below filter area only (so summary scrolls with detail)
+ws_t.freeze_panes = "A7"
 
 # Detail column → inventory column mapping (A–J same as regular)
 t_det_map = {
     "A": "D", "B": "B", "C": "C", "D": "G", "E": "M",
     "F": "N", "G": "O", "H": "U", "I": "X", "J": "AC",
-}
-
-# Tech detail columns → tech values sheet column mapping (updated for NIR layout)
-t_tech_map = {
-    "L": "M",  # נובל
-    "M": "F",  # MWIR A
-    "N": "J",  # MWIR B
-    "O": "G",  # LWIR A
-    "P": "K",  # LWIR B
-    "Q": "P",  # ממוצע משולב
 }
 
 T_ROW_IDX = f"ROW({DI}!$A$2:$A$500)-ROW({DI}!$A$2)+1"
@@ -1463,15 +1457,38 @@ for r in range(23, 323):
             f'=IF($K{r}="","",INDEX({DI}!{R(icol)},$K{r}))'
         )
 
-    # L–Q: pull tech values via INDEX/MATCH on item ID (A column = ID)
-    for dcol, tcol in t_tech_map.items():
-        ws_t[f"{dcol}{r}"] = (
-            f'=IF($K{r}="","",IFERROR(INDEX({TV}!{R(tcol)},'
-            f'MATCH(A{r},{TV}!{R("A")},0)),""))'
-        )
+    _tmatch = f'MATCH(A{r},{TV}!{R("A")},0)'
+    # L: נובל
+    ws_t[f"L{r}"] = (
+        f'=IF($K{r}="","",IFERROR(INDEX({TV}!{R("M")},{_tmatch}),""))'
+    )
+    # M: ממוצע צד א (avg of MWIR A + LWIR A)
+    ws_t[f"M{r}"] = (
+        f'=IF($K{r}="","",IFERROR(AVERAGE('
+        f'INDEX({TV}!{R("F")},{_tmatch}),'
+        f'INDEX({TV}!{R("G")},{_tmatch})),""))'
+    )
+    # N: ממוצע צד ב (avg of MWIR B + LWIR B)
+    ws_t[f"N{r}"] = (
+        f'=IF($K{r}="","",IFERROR(AVERAGE('
+        f'INDEX({TV}!{R("J")},{_tmatch}),'
+        f'INDEX({TV}!{R("K")},{_tmatch})),""))'
+    )
+    # O: NIR צד א
+    ws_t[f"O{r}"] = (
+        f'=IF($K{r}="","",IFERROR(INDEX({TV}!{R("H")},{_tmatch}),""))'
+    )
+    # P: NIR צד ב
+    ws_t[f"P{r}"] = (
+        f'=IF($K{r}="","",IFERROR(INDEX({TV}!{R("L")},{_tmatch}),""))'
+    )
+
+    # Number format for tech detail columns
+    for col in ("M", "N", "O", "P"):
+        ws_t[f"{col}{r}"].number_format = "0.00"
 
     # Style all cells
-    for c in range(1, 18):
+    for c in range(1, 17):
         style_data(ws_t.cell(row=r, column=c), r - 23)
 
 # ---------------------------------------------------------------------------
@@ -1511,7 +1528,7 @@ for r in range(T_LN_S, T_LN_E + 1):
         f'"באיחור!","תקין"))'
     )
     ws_t[f"F{r}"].number_format = "DD/MM/YYYY"
-    for c in range(1, 18):
+    for c in range(1, 17):
         style_data(ws_t.cell(row=r, column=c), r - T_LN_S)
 
 # Conditional formatting — overdue red
@@ -1713,8 +1730,8 @@ ws_l.protection.sheet = True
 ws_l.protection.password = "1998"
 ws_l.protection.enable()
 
-# --- Tech Values (ws_tv) — unlock input columns A, F, G, H, J, K, L, M ---
-tv_input_cols = [1, 6, 7, 8, 10, 11, 12, 13]  # A, F, G, H, J, K, L, M
+# --- Tech Values (ws_tv) — unlock input columns F, G, H, J, K, L, M ---
+tv_input_cols = [6, 7, 8, 10, 11, 12, 13]  # F, G, H, J, K, L, M (A is auto-populated)
 for r in range(2, 501):
     for c in tv_input_cols:
         ws_tv.cell(row=r, column=c).protection = UNLOCKED
